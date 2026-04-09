@@ -247,6 +247,7 @@ export default function Home() {
                                 <TableRow className="border-none hover:bg-transparent">
                                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground min-w-[140px]">Golfer</TableHead>
                                   <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">Total</TableHead>
+                                  <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">Thru</TableHead>
                                   <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">R1</TableHead>
                                   <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">R2</TableHead>
                                   <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">R3</TableHead>
@@ -270,6 +271,9 @@ export default function Home() {
                                       </TableCell>
                                       <TableCell className={`text-right font-mono font-bold ${golfer.totalToPar !== null && golfer.totalToPar < 0 ? 'text-primary' : ''}`}>
                                         {formatScore(golfer.totalToPar)}
+                                      </TableCell>
+                                      <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                                        {golfer.isCut || golfer.isWd || golfer.isDq ? '-' : golfer.holesCompleted === 18 ? 'F' : golfer.holesCompleted > 0 ? golfer.holesCompleted : '-'}
                                       </TableCell>
                                       {golfer.roundScores.map((score, i) => (
                                         <TableCell key={i} className={`text-right font-mono text-sm ${score !== null && score < 0 ? 'text-primary' : ''} ${golfer.roundCounted[i] === false ? 'opacity-50 line-through' : ''} ${golfer.roundIsPenalty[i] ? 'italic text-destructive' : ''}`}>
