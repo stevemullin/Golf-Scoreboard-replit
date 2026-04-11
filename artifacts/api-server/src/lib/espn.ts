@@ -95,7 +95,23 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
         const roundNumber = linescore.period;
         if (roundNumber > 4) continue;
 
-        const displayValue = linescore.displayValue || "-";
+        // Critical: check whether displayValue actually EXISTS on the object.
+        // - displayValue absent → round simply hasn't started yet (skip this entry)
+        // - displayValue = "-" → could be cut (check further) or in-progress placeholder
+        // - displayValue = "E" / number → active/finished score
+        const hasDisplayValue = Object.prototype.hasOwnProperty.call(linescore, "displayValue")
+          && linescore.displayValue != null
+          && linescore.displayValue !== "";
+
+        // If there's no displayValue at all, the round hasn't started.
+        // Still push a "not started" entry so the DB upsert can clear any
+        // stale isCut=true flags left over from a previous (buggy) sync.
+        if (!hasDisplayValue) {
+          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: false, isWd: false, isDq: false, teeTime: null });
+          continue;
+        }
+
+        const displayValue = linescore.displayValue as string;
         const holes = linescore.linescores || [];
         const holesCompleted = holes.filter(
           (h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== ""
@@ -103,7 +119,8 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
 
         const scoreToPar = parseScoreValue(displayValue);
 
-        // Detect cut: displayValue is "-", holesCompleted is 0, and roundNumber > 2
+        // A golfer is cut only when displayValue EXISTS and is "-", holesCompleted
+        // is 0, and the round is beyond round 2 (cuts happen after R2).
         const isCut = displayValue === "-" && holesCompleted === 0 && roundNumber > 2;
 
         // Extract tee time
@@ -125,20 +142,6 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
           isDq: false,
           teeTime,
         });
-      }
-
-      // A golfer is only genuinely cut if round 2 is fully complete (18 holes).
-      // Before that, future-round rows show "-" / 0 holes but that just means
-      // the round hasn't happened yet — not that the golfer missed the cut.
-      const r2Entry = scores.find(s => s.roundNumber === 2);
-      const r2Complete = r2Entry ? r2Entry.holesCompleted === 18 : false;
-      if (!r2Complete) {
-        for (const score of scores) {
-          if (score.isCut) {
-            score.isCut = false;
-            // scoreToPar is already null for these entries
-          }
-        }
       }
 
       golfers.push({ espnId, name, scores, currentRound: maxRound });
