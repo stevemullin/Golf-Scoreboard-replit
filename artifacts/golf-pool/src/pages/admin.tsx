@@ -38,6 +38,8 @@ export default function Admin() {
 
   const [newTourney, setNewTourney] = useState({ name: "", year: new Date().getFullYear(), espnId: "" });
   const [newMember, setNewMember] = useState("");
+  const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
+  const [editingEspnValue, setEditingEspnValue] = useState("");
   
   const [pickTourneyId, setPickTourneyId] = useState("");
   const [pickMemberId, setPickMemberId] = useState("");
@@ -62,7 +64,7 @@ export default function Admin() {
   // Update selected golfers when picks change
   React.useEffect(() => {
     if (existingPicks) {
-      setSelectedGolfers(existingPicks.map(p => p.id));
+      setSelectedGolfers(existingPicks.map((p: { id: string }) => p.id));
     } else {
       setSelectedGolfers([]);
     }
@@ -108,6 +110,8 @@ export default function Admin() {
     );
   }
 
+  const apiErr = (e: unknown) => (e as any)?.data?.error || (e as any)?.message || "An error occurred";
+
   const handleCreateTournament = () => {
     createTournament.mutate({
       data: {
@@ -122,23 +126,42 @@ export default function Admin() {
         refetchTournaments();
         setNewTourney({ name: "", year: new Date().getFullYear(), espnId: "" });
       },
-      onError: (e: any) => toast({ title: "Error", description: e.error || "Failed to create", variant: "destructive" })
+      onError: (e: unknown) => toast({ title: "Error creating tournament", description: apiErr(e), variant: "destructive" })
     });
+  };
+
+  const handleUpdateEspnId = async (tournamentId: string) => {
+    if (!editingEspnValue.trim()) return;
+    try {
+      const res = await fetch(`/api/admin/tournament/${tournamentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ espnEventId: editingEspnValue.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Error updating ESPN ID", description: data.error || res.statusText, variant: "destructive" });
+        return;
+      }
+      toast({ title: "ESPN ID Updated", description: "Field re-fetched from ESPN." });
+      setEditingEspnId(null);
+      setEditingEspnValue("");
+      refetchTournaments();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleCreateMember = () => {
     createMember.mutate({
-      data: {
-        name: newMember,
-        password
-      }
+      data: { name: newMember, password }
     }, {
       onSuccess: () => {
         toast({ title: "Member Added" });
         refetchMembers();
         setNewMember("");
       },
-      onError: (e: any) => toast({ title: "Error", description: e.error || "Failed to add member", variant: "destructive" })
+      onError: (e: unknown) => toast({ title: "Error adding member", description: apiErr(e), variant: "destructive" })
     });
   };
 
@@ -151,7 +174,7 @@ export default function Admin() {
         toast({ title: "Tournament Activated" });
         refetchTournaments();
       },
-      onError: (e: any) => toast({ title: "Error", description: e.error || "Failed to activate", variant: "destructive" })
+      onError: (e: unknown) => toast({ title: "Error activating tournament", description: apiErr(e), variant: "destructive" })
     });
   };
 
@@ -160,8 +183,8 @@ export default function Admin() {
     forceRefresh.mutate({
       data: { tournamentId: activeTournament.id, password }
     }, {
-      onSuccess: () => toast({ title: "Refresh Triggered" }),
-      onError: (e: any) => toast({ title: "Error", description: e.error || "Failed to refresh", variant: "destructive" })
+      onSuccess: () => toast({ title: "Refresh complete" }),
+      onError: (e: unknown) => toast({ title: "Error refreshing", description: apiErr(e), variant: "destructive" })
     });
   };
 
@@ -179,7 +202,7 @@ export default function Admin() {
         toast({ title: "Picks Saved" });
         refetchPicks();
       },
-      onError: (e: any) => toast({ title: "Error", description: e.error || "Failed to save picks", variant: "destructive" })
+      onError: (e: unknown) => toast({ title: "Error saving picks", description: apiErr(e), variant: "destructive" })
     });
   };
 
@@ -241,17 +264,44 @@ export default function Admin() {
                 <h3 className="font-bold uppercase text-sm text-muted-foreground">Existing Tournaments</h3>
                 <div className="space-y-2">
                   {tournaments?.map(t => (
-                    <div key={t.id} className="flex items-center justify-between p-3 bg-background rounded-md border border-border">
-                      <div>
-                        <div className="font-bold">{t.name} {t.year}</div>
-                        <div className="text-xs text-muted-foreground">ESPN ID: {t.espnEventId}</div>
+                    <div key={t.id} className="p-3 bg-background rounded-md border border-border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-bold">{t.name} {t.year}</div>
+                          <div className="text-xs text-muted-foreground">ESPN ID: {t.espnEventId || <span className="text-yellow-500">not set</span>}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {t.isActive ? (
+                            <Badge className="bg-primary text-primary-foreground hover:bg-primary uppercase tracking-wider">Active</Badge>
+                          ) : (
+                            <Button size="sm" variant="outline" onClick={() => handleActivate(t.id)} disabled={activateTournament.isPending} className="uppercase text-xs tracking-wider">
+                              Set Active
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            setEditingEspnId(editingEspnId === t.id ? null : t.id);
+                            setEditingEspnValue(t.espnEventId || "");
+                          }} className="text-xs text-muted-foreground hover:text-primary px-2">
+                            Edit ID
+                          </Button>
+                        </div>
                       </div>
-                      {t.isActive ? (
-                        <Badge className="bg-primary text-primary-foreground hover:bg-primary uppercase tracking-wider">Active</Badge>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => handleActivate(t.id)} disabled={activateTournament.isPending} className="uppercase text-xs tracking-wider">
-                          Set Active
-                        </Button>
+                      {editingEspnId === t.id && (
+                        <div className="flex gap-2 pt-1">
+                          <Input
+                            value={editingEspnValue}
+                            onChange={e => setEditingEspnValue(e.target.value)}
+                            placeholder="ESPN Event ID"
+                            className="h-8 text-sm bg-input border-border"
+                            onKeyDown={e => { if (e.key === "Enter") handleUpdateEspnId(t.id); if (e.key === "Escape") { setEditingEspnId(null); setEditingEspnValue(""); } }}
+                          />
+                          <Button size="sm" onClick={() => handleUpdateEspnId(t.id)} disabled={!editingEspnValue.trim()} className="h-8 text-xs uppercase tracking-wider">
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingEspnId(null); setEditingEspnValue(""); }} className="h-8 text-xs">
+                            Cancel
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ))}

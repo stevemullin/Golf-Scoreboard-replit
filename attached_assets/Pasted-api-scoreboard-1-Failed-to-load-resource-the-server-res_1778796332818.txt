@@ -1,0 +1,276 @@
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/scoreboard:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/admin/tournament:1  Failed to load resource: the server responded with a status of 500 ()
+api/admin/tournament:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/admin/tournament:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+api/tournaments:1  Failed to load resource: the server responded with a status of 500 ()
+api/pool-members:1  Failed to load resource: the server responded with a status of 500 ()
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/pool-members 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+iC @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/tournaments 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+PR @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/tournaments 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+PR @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/pool-members 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+iC @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/tournaments 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+PR @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/pool-members 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+iC @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/tournaments 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+PR @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/pool-members 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+iC @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/pool-members 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+iC @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9
+index-Jdj5UB2a.js:9  GET https://build-this-app--stevenmullin10.replit.app/api/tournaments 500 (Internal Server Error)
+Qt @ index-Jdj5UB2a.js:9
+PR @ index-Jdj5UB2a.js:9
+queryFn @ index-Jdj5UB2a.js:9
+u @ index-Jdj5UB2a.js:9
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.then
+(anonymous) @ index-Jdj5UB2a.js:9
+Promise.catch
+A @ index-Jdj5UB2a.js:9
+start @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+#f @ index-Jdj5UB2a.js:9
+fetch @ index-Jdj5UB2a.js:9
+refetch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+batch @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+await in (anonymous)
+(anonymous) @ index-Jdj5UB2a.js:9
+onFocus @ index-Jdj5UB2a.js:9
+(anonymous) @ index-Jdj5UB2a.js:9
+r @ index-Jdj5UB2a.js:9

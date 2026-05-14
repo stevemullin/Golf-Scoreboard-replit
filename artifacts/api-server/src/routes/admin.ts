@@ -82,6 +82,65 @@ router.post("/admin/tournament", async (req, res) => {
   }
 });
 
+// PATCH /admin/tournament/:tournamentId — update ESPN ID and re-fetch field
+router.patch("/admin/tournament/:tournamentId", async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const { espnEventId, password } = req.body;
+
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+
+    if (!espnEventId) {
+      res.status(400).json({ error: "espnEventId is required" });
+      return;
+    }
+
+    const tournament = await db.update(tournamentsTable)
+      .set({ espnEventId })
+      .where(eq(tournamentsTable.id, tournamentId))
+      .returning()
+      .then(r => r[0]);
+
+    if (!tournament) {
+      res.status(404).json({ error: "Tournament not found" });
+      return;
+    }
+
+    // Re-fetch the field from ESPN with the new ID
+    try {
+      const field = await fetchESPNField(espnEventId);
+      for (const golfer of field) {
+        const existing = await db.select().from(golfersTable).where(eq(golfersTable.espnId, golfer.espnId)).then(r => r[0]);
+        if (!existing) {
+          await db.insert(golfersTable).values({ espnId: golfer.espnId, name: golfer.name });
+        }
+      }
+    } catch (err) {
+      req.log.warn({ err }, "Failed to re-fetch ESPN field after ESPN ID update");
+    }
+
+    // Reset cache so next scoreboard load triggers a fresh sync
+    await db.update(apiCacheTable).set({ lastFetchedAt: null }).where(eq(apiCacheTable.tournamentId, tournamentId));
+
+    res.json({
+      id: tournament.id,
+      name: tournament.name,
+      year: tournament.year,
+      espnEventId: tournament.espnEventId,
+      status: tournament.status,
+      currentRound: tournament.currentRound,
+      isActive: tournament.isActive,
+      createdAt: tournament.createdAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to update tournament");
+    res.status(500).json({ error: "Failed to update tournament" });
+  }
+});
+
 // POST /admin/tournament/:tournamentId/activate
 router.post("/admin/tournament/:tournamentId/activate", async (req, res) => {
   try {
