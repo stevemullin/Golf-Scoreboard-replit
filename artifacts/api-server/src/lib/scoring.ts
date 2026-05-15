@@ -154,14 +154,23 @@ export async function getOrRefreshScoreboard(tournamentId: string): Promise<Lead
   if (cache) {
     const now = new Date();
     const lastFetched = cache.lastFetchedAt;
+    const hasStaleData = !!lastFetched;
     const shouldRefresh = !lastFetched ||
       (now.getTime() - lastFetched.getTime()) > cache.refreshIntervalMinutes * 60 * 1000;
 
     if (shouldRefresh) {
-      try {
-        await refreshFromESPN(tournamentId);
-      } catch (err) {
-        logger.error({ err }, "ESPN refresh failed, serving stale data");
+      if (hasStaleData) {
+        // Stale-while-revalidate: serve cached DB data immediately, refresh in background
+        refreshFromESPN(tournamentId).catch(err =>
+          logger.error({ err }, "Background ESPN refresh failed")
+        );
+      } else {
+        // No cached data at all — must fetch synchronously for first load
+        try {
+          await refreshFromESPN(tournamentId);
+        } catch (err) {
+          logger.error({ err }, "ESPN refresh failed, serving stale data");
+        }
       }
     }
   }
@@ -174,18 +183,29 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
   if (!tournament) return [];
 
   const currentRound = tournament.currentRound || 1;
-  const members = await db.select().from(poolMembersTable).orderBy(poolMembersTable.name);
 
-  const allScores = await db.select({
-    golferId: golferScoresTable.golferId,
-    roundNumber: golferScoresTable.roundNumber,
-    scoreToPar: golferScoresTable.scoreToPar,
-    holesCompleted: golferScoresTable.holesCompleted,
-    isCut: golferScoresTable.isCut,
-    isWd: golferScoresTable.isWd,
-    isDq: golferScoresTable.isDq,
-    teeTime: golferScoresTable.teeTime,
-  }).from(golferScoresTable).where(eq(golferScoresTable.tournamentId, tournamentId));
+  // Fetch all data in parallel — no sequential per-member queries
+  const [members, allScores, allPicks] = await Promise.all([
+    db.select().from(poolMembersTable).orderBy(poolMembersTable.name),
+    db.select({
+      golferId: golferScoresTable.golferId,
+      roundNumber: golferScoresTable.roundNumber,
+      scoreToPar: golferScoresTable.scoreToPar,
+      holesCompleted: golferScoresTable.holesCompleted,
+      isCut: golferScoresTable.isCut,
+      isWd: golferScoresTable.isWd,
+      isDq: golferScoresTable.isDq,
+      teeTime: golferScoresTable.teeTime,
+    }).from(golferScoresTable).where(eq(golferScoresTable.tournamentId, tournamentId)),
+    db.select({
+      poolMemberId: teamPicksTable.poolMemberId,
+      golferId: teamPicksTable.golferId,
+      golferName: golfersTable.name,
+    })
+      .from(teamPicksTable)
+      .innerJoin(golfersTable, eq(teamPicksTable.golferId, golfersTable.id))
+      .where(eq(teamPicksTable.tournamentId, tournamentId)),
+  ]);
 
   // Max score per round for cut/WD/DQ penalties
   const maxScores: Record<number, number | null> = {};
@@ -193,19 +213,17 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
     maxScores[r] = getMaxScoreForRound(allScores, r);
   }
 
+  // Group picks by member for O(1) lookup
+  const picksByMember = new Map<string, Array<{ golferId: string; golferName: string }>>();
+  for (const pick of allPicks) {
+    if (!picksByMember.has(pick.poolMemberId)) picksByMember.set(pick.poolMemberId, []);
+    picksByMember.get(pick.poolMemberId)!.push({ golferId: pick.golferId, golferName: pick.golferName });
+  }
+
   const entries: LeaderboardEntry[] = [];
 
   for (const member of members) {
-    const picks = await db.select({
-      golferId: teamPicksTable.golferId,
-      golferName: golfersTable.name,
-    })
-      .from(teamPicksTable)
-      .innerJoin(golfersTable, eq(teamPicksTable.golferId, golfersTable.id))
-      .where(and(
-        eq(teamPicksTable.tournamentId, tournamentId),
-        eq(teamPicksTable.poolMemberId, member.id)
-      ));
+    const picks = picksByMember.get(member.id) ?? [];
 
     if (picks.length === 0) {
       entries.push({
