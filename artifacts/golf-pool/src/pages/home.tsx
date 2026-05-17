@@ -166,18 +166,19 @@ export default function Home() {
         ) : (
           <main className="space-y-12">
             <Card className="bg-card border-card-border overflow-hidden rounded-xl shadow-xl shadow-black/50">
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-black/40">
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-16 text-center text-muted-foreground uppercase font-bold text-xs tracking-wider">Pos</TableHead>
-                    <TableHead className="text-muted-foreground uppercase font-bold text-xs tracking-wider">Player</TableHead>
+                    <TableHead className="w-14 text-center text-muted-foreground uppercase font-bold text-xs tracking-wider">Pos</TableHead>
+                    <TableHead className="text-muted-foreground uppercase font-bold text-xs tracking-wider min-w-[100px]">Player</TableHead>
                     <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">Total</TableHead>
-                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider hidden sm:table-cell">Thru</TableHead>
-                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider hidden sm:table-cell">Today</TableHead>
+                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">Thru</TableHead>
+                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">Today</TableHead>
                     <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">R1</TableHead>
                     <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">R2</TableHead>
-                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider hidden md:table-cell">R3</TableHead>
-                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider hidden md:table-cell">R4</TableHead>
+                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">R3</TableHead>
+                    <TableHead className="text-right text-muted-foreground uppercase font-bold text-xs tracking-wider">R4</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -193,12 +194,12 @@ export default function Home() {
                         <TableCell className={`text-right font-mono font-bold text-lg ${entry.toPar !== null && entry.toPar < 0 ? 'text-primary' : entry.toPar && entry.toPar > 0 ? 'text-muted-foreground' : ''}`}>
                           {formatScore(entry.toPar)}
                         </TableCell>
-                        <TableCell className="text-right text-muted-foreground text-sm font-mono hidden sm:table-cell">{entry.thru}</TableCell>
-                        <TableCell className="text-right font-mono text-sm hidden sm:table-cell">{formatScore(entry.today)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm font-mono">{entry.thru}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{formatScore(entry.today)}</TableCell>
                         <TableCell className="text-right font-mono">{formatScore(entry.r1)}</TableCell>
                         <TableCell className="text-right font-mono">{formatScore(entry.r2)}</TableCell>
-                        <TableCell className="text-right font-mono hidden md:table-cell">{formatScore(entry.r3)}</TableCell>
-                        <TableCell className="text-right font-mono hidden md:table-cell">{formatScore(entry.r4)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatScore(entry.r3)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatScore(entry.r4)}</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -213,6 +214,7 @@ export default function Home() {
                   )}
                 </TableBody>
               </Table>
+              </div>
               {mode === "manual" && (
                 <div className="p-4 bg-black/20 border-t border-border flex items-center justify-between">
                    <div className="flex items-center gap-2">
@@ -394,18 +396,18 @@ function ManualTableRow({ entry, rank, onSave }: { entry: any, rank: number, onS
       <TableCell className={`text-right font-mono font-bold text-lg ${total < 0 ? 'text-primary' : total > 0 ? 'text-muted-foreground' : ''}`}>
         {formatScore(total)}
       </TableCell>
-      <TableCell className="hidden sm:table-cell"></TableCell>
-      <TableCell className="hidden sm:table-cell"></TableCell>
+      <TableCell></TableCell>
+      <TableCell></TableCell>
       <TableCell className="text-right">
         <Input value={r1} onChange={e => setR1(e.target.value)} className="w-16 ml-auto text-right font-mono h-8" />
       </TableCell>
       <TableCell className="text-right">
         <Input value={r2} onChange={e => setR2(e.target.value)} className="w-16 ml-auto text-right font-mono h-8" />
       </TableCell>
-      <TableCell className="text-right hidden md:table-cell">
+      <TableCell className="text-right">
         <Input value={r3} onChange={e => setR3(e.target.value)} className="w-16 ml-auto text-right font-mono h-8" />
       </TableCell>
-      <TableCell className="text-right hidden md:table-cell">
+      <TableCell className="text-right">
         <Input value={r4} onChange={e => setR4(e.target.value)} className="w-16 ml-auto text-right font-mono h-8" />
       </TableCell>
       <TableCell className="text-right">
