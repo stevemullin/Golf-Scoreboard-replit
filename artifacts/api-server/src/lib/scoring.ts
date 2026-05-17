@@ -9,6 +9,7 @@ import {
   apiCacheTable,
 } from "@workspace/db";
 import { eq, and, isNotNull, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { fetchESPNScoreboard } from "./espn";
 import { logger } from "./logger";
 
@@ -86,6 +87,12 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
   const tournament = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId)).then(r => r[0]);
   if (!tournament) return;
 
+  // Stamp lastFetchedAt immediately — prevents concurrent background refreshes
+  // from all piling up while the first ESPN fetch is in flight.
+  await db.update(apiCacheTable)
+    .set({ lastFetchedAt: new Date() })
+    .where(eq(apiCacheTable.tournamentId, tournamentId));
+
   const espnData = await fetchESPNScoreboard(tournament.espnEventId ?? undefined);
   if (!espnData) {
     logger.warn({ tournamentId }, "ESPN fetch returned null, serving stale data");
@@ -94,27 +101,43 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
 
   const { golfers, eventStatus } = espnData;
 
+  // ── Batch upsert golfers ──────────────────────────────────────────────────
+  // One round-trip for all golfers instead of a select+insert/update per golfer.
+  const golferValues = golfers.map(g => ({ espnId: g.espnId, name: g.name }));
+  if (golferValues.length > 0) {
+    await db.insert(golfersTable)
+      .values(golferValues)
+      .onConflictDoUpdate({
+        target: golfersTable.espnId,
+        set: { name: sql`excluded.name` },
+      });
+  }
+
+  // Resolve espnId → internal golferId in one query
+  const espnIds = golfers.map(g => g.espnId);
+  const dbGolfers = await db.select({ id: golfersTable.id, espnId: golfersTable.espnId })
+    .from(golfersTable)
+    .where(sql`${golfersTable.espnId} = ANY(${sql.raw(`ARRAY[${espnIds.map(id => `'${id.replace(/'/g, "''")}'`).join(",")}]`)})`)
+  const espnToId = new Map(dbGolfers.map(g => [g.espnId, g.id]));
+
+  // ── Batch upsert golfer scores ────────────────────────────────────────────
+  const scoreValues: Array<{
+    tournamentId: string;
+    golferId: string;
+    roundNumber: number;
+    scoreToPar: number | null;
+    holesCompleted: number;
+    isCut: boolean;
+    isWd: boolean;
+    isDq: boolean;
+    teeTime: string | null;
+  }> = [];
+
   for (const golferData of golfers) {
-    const existing = await db.select().from(golfersTable).where(eq(golfersTable.espnId, golferData.espnId)).then(r => r[0]);
-
-    let golferId: string;
-    if (existing) {
-      golferId = existing.id;
-      await db.update(golfersTable).set({ name: golferData.name }).where(eq(golfersTable.id, golferId));
-    } else {
-      const inserted = await db.insert(golfersTable).values({ espnId: golferData.espnId, name: golferData.name }).returning();
-      golferId = inserted[0].id;
-    }
-
+    const golferId = espnToId.get(golferData.espnId);
+    if (!golferId) continue;
     for (const rs of golferData.scores) {
-      const existingScore = await db.select().from(golferScoresTable)
-        .where(and(
-          eq(golferScoresTable.tournamentId, tournamentId),
-          eq(golferScoresTable.golferId, golferId),
-          eq(golferScoresTable.roundNumber, rs.roundNumber)
-        )).then(r => r[0]);
-
-      const scoreData = {
+      scoreValues.push({
         tournamentId,
         golferId,
         roundNumber: rs.roundNumber,
@@ -124,14 +147,27 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
         isWd: rs.isWd,
         isDq: rs.isDq,
         teeTime: rs.teeTime,
-      };
-
-      if (existingScore) {
-        await db.update(golferScoresTable).set(scoreData).where(eq(golferScoresTable.id, existingScore.id));
-      } else {
-        await db.insert(golferScoresTable).values(scoreData);
-      }
+      });
     }
+  }
+
+  // Upsert all scores in chunks of 100 to stay within parameter limits
+  const CHUNK_SIZE = 100;
+  for (let i = 0; i < scoreValues.length; i += CHUNK_SIZE) {
+    const chunk = scoreValues.slice(i, i + CHUNK_SIZE);
+    await db.insert(golferScoresTable)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [golferScoresTable.tournamentId, golferScoresTable.golferId, golferScoresTable.roundNumber],
+        set: {
+          scoreToPar: sql`excluded.score_to_par`,
+          holesCompleted: sql`excluded.holes_completed`,
+          isCut: sql`excluded.is_cut`,
+          isWd: sql`excluded.is_wd`,
+          isDq: sql`excluded.is_dq`,
+          teeTime: sql`excluded.tee_time`,
+        },
+      });
   }
 
   let newStatus = tournament.status;
@@ -143,9 +179,10 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
     status: newStatus,
   }).where(eq(tournamentsTable.id, tournamentId));
 
+  // Final timestamp update to reflect when the full refresh completed
   await db.update(apiCacheTable).set({ lastFetchedAt: new Date() }).where(eq(apiCacheTable.tournamentId, tournamentId));
 
-  logger.info({ tournamentId, golferCount: golfers.length }, "ESPN refresh complete");
+  logger.info({ tournamentId, golferCount: golfers.length, scoreCount: scoreValues.length }, "ESPN refresh complete");
 }
 
 export async function getOrRefreshScoreboard(tournamentId: string): Promise<LeaderboardEntry[]> {
