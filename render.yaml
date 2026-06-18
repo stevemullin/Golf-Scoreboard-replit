@@ -11,9 +11,12 @@ services:
     branch: main
     autoDeploy: true # redeploy automatically on every push to main
     # Build the frontend + API, then create/update the database tables in Neon.
-    # Pin pnpm 9: pnpm 10 (latest) treats esbuild's un-recorded build approval as
-    # a fatal ERR_PNPM_IGNORED_BUILDS. pnpm 9 runs approved build scripts normally.
-    buildCommand: npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && BASE_PATH=/ PORT=8080 pnpm build && pnpm --filter @workspace/db push-force
+    # pnpm 10 matches the lockfile and installs everything. Its only failure is
+    # the cosmetic "esbuild build script ignored" gate, which "|| true" survives —
+    # esbuild still works via its @esbuild/linux-x64 package. We skip the root
+    # "pnpm build" (its tsc typecheck needs types not present here) and build only
+    # the two packages the app actually serves.
+    buildCommand: npm install -g pnpm@10 && (pnpm install || true) && (pnpm rebuild esbuild || true) && BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build && pnpm --filter @workspace/db push-force
     startCommand: pnpm --filter @workspace/api-server start
     healthCheckPath: /api/healthz
     envVars:

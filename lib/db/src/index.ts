@@ -16,40 +16,13 @@ if (!connectionString) {
   );
 }
 
-function isRetryableConnectionError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const msg = String((err as Record<string, unknown>).message ?? "");
-  return (
-    msg.includes("endpoint has been disabled") ||
-    msg.includes("Enable it using the API and retry") ||
-    msg.includes("timeout exceeded when trying to connect") ||
-    msg.includes("Connection terminated") ||
-    msg.includes("ECONNREFUSED")
-  );
-}
-
-class NeonRetryPool extends Pool {
-  override async connect(): Promise<pg.PoolClient> {
-    const maxAttempts = 5;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        return await super.connect();
-      } catch (err) {
-        if (isRetryableConnectionError(err) && attempt < maxAttempts - 1) {
-          const delayMs = Math.min(1000 * 2 ** attempt, 16000);
-          await new Promise((res) => setTimeout(res, delayMs));
-          continue;
-        }
-        throw err;
-      }
-    }
-    throw new Error("Failed to connect to database after multiple retries");
-  }
-}
-
-export const pool = new NeonRetryPool({
+// Plain pg Pool. A previous NeonRetryPool subclass overrode connect() as a
+// promise-only method, but pg's pool.query() calls connect(callback) internally;
+// the ignored callback meant every query hung forever. connectionTimeoutMillis
+// gives Neon time to wake from suspension (cold start can take ~20 s); the
+// keep-alive ping keeps it warm so that rarely matters.
+export const pool = new Pool({
   connectionString,
-  // 30 s gives Neon time to wake from suspension (cold start can take ~20 s)
   connectionTimeoutMillis: 30000,
 });
 
