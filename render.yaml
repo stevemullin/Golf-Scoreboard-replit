@@ -11,7 +11,9 @@ services:
     branch: main
     autoDeploy: true # redeploy automatically on every push to main
     # Build the frontend + API, then create/update the database tables in Neon.
-    buildCommand: npm install -g pnpm && pnpm install && BASE_PATH=/ PORT=8080 pnpm build && pnpm --filter @workspace/db push-force
+    # Pin pnpm 9: pnpm 10 (latest) treats esbuild's un-recorded build approval as
+    # a fatal ERR_PNPM_IGNORED_BUILDS. pnpm 9 runs approved build scripts normally.
+    buildCommand: npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && BASE_PATH=/ PORT=8080 pnpm build && pnpm --filter @workspace/db push-force
     startCommand: pnpm --filter @workspace/api-server start
     healthCheckPath: /api/healthz
     envVars:
