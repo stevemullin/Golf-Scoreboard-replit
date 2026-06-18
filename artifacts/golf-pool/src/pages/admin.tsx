@@ -23,7 +23,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function Admin() {
   const [password, setPassword] = useState(localStorage.getItem("admin_password") || "");
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("admin_password"));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -70,16 +71,40 @@ export default function Admin() {
     }
   }, [existingPicks]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("admin_password", password);
-    setIsAuthenticated(true);
+    setIsVerifying(true);
+    try {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        toast({ title: "Wrong password", description: "Check your password and try again.", variant: "destructive" });
+        return;
+      }
+      localStorage.setItem("admin_password", password);
+      setIsAuthenticated(true);
+    } catch {
+      toast({ title: "Could not reach server", variant: "destructive" });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem("admin_password");
     setIsAuthenticated(false);
   };
+
+  const handle401 = () => {
+    handleLogout();
+    toast({ title: "Session expired", description: "Password may have changed. Please log in again.", variant: "destructive" });
+  };
+
+  const apiErr = (e: unknown) => (e as any)?.data?.error || (e as any)?.message || "An error occurred";
+  const isUnauth = (e: unknown) => (e as any)?.status === 401 || (e as any)?.data?.error === "Invalid password";
 
   if (!isAuthenticated) {
     return (
@@ -96,8 +121,8 @@ export default function Admin() {
                 className="w-full bg-background border-input"
               />
             </div>
-            <Button type="submit" className="w-full uppercase tracking-wider font-bold">
-              Login
+            <Button type="submit" disabled={isVerifying} className="w-full uppercase tracking-wider font-bold">
+              {isVerifying ? "Checking…" : "Login"}
             </Button>
           </form>
           <div className="text-center">
@@ -109,8 +134,6 @@ export default function Admin() {
       </div>
     );
   }
-
-  const apiErr = (e: unknown) => (e as any)?.data?.error || (e as any)?.message || "An error occurred";
 
   const handleCreateTournament = () => {
     createTournament.mutate({
@@ -126,7 +149,10 @@ export default function Admin() {
         refetchTournaments();
         setNewTourney({ name: "", year: new Date().getFullYear(), espnId: "" });
       },
-      onError: (e: unknown) => toast({ title: "Error creating tournament", description: apiErr(e), variant: "destructive" })
+      onError: (e: unknown) => {
+        if (isUnauth(e)) { handle401(); return; }
+        toast({ title: "Error creating tournament", description: apiErr(e), variant: "destructive" });
+      }
     });
   };
 
@@ -139,6 +165,7 @@ export default function Admin() {
         body: JSON.stringify({ espnEventId: editingEspnValue.trim(), password }),
       });
       const data = await res.json();
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) {
         toast({ title: "Error updating ESPN ID", description: data.error || res.statusText, variant: "destructive" });
         return;
@@ -161,7 +188,10 @@ export default function Admin() {
         refetchMembers();
         setNewMember("");
       },
-      onError: (e: unknown) => toast({ title: "Error adding member", description: apiErr(e), variant: "destructive" })
+      onError: (e: unknown) => {
+        if (isUnauth(e)) { handle401(); return; }
+        toast({ title: "Error adding member", description: apiErr(e), variant: "destructive" });
+      }
     });
   };
 
@@ -174,7 +204,10 @@ export default function Admin() {
         toast({ title: "Tournament Activated" });
         refetchTournaments();
       },
-      onError: (e: unknown) => toast({ title: "Error activating tournament", description: apiErr(e), variant: "destructive" })
+      onError: (e: unknown) => {
+        if (isUnauth(e)) { handle401(); return; }
+        toast({ title: "Error activating tournament", description: apiErr(e), variant: "destructive" });
+      }
     });
   };
 
@@ -184,7 +217,10 @@ export default function Admin() {
       data: { tournamentId: activeTournament.id, password }
     }, {
       onSuccess: () => toast({ title: "Refresh complete" }),
-      onError: (e: unknown) => toast({ title: "Error refreshing", description: apiErr(e), variant: "destructive" })
+      onError: (e: unknown) => {
+        if (isUnauth(e)) { handle401(); return; }
+        toast({ title: "Error refreshing", description: apiErr(e), variant: "destructive" });
+      }
     });
   };
 
@@ -202,7 +238,10 @@ export default function Admin() {
         toast({ title: "Picks Saved" });
         refetchPicks();
       },
-      onError: (e: unknown) => toast({ title: "Error saving picks", description: apiErr(e), variant: "destructive" })
+      onError: (e: unknown) => {
+        if (isUnauth(e)) { handle401(); return; }
+        toast({ title: "Error saving picks", description: apiErr(e), variant: "destructive" });
+      }
     });
   };
 

@@ -22,6 +22,16 @@ function checkPassword(password: string): boolean {
   return password === adminPassword;
 }
 
+// POST /admin/verify - Check password without side effects
+router.post("/admin/verify", (req, res) => {
+  const { password } = req.body;
+  if (!checkPassword(password)) {
+    res.status(401).json({ error: "Invalid password" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 // POST /admin/tournament - Create tournament
 router.post("/admin/tournament", async (req, res) => {
   try {
