@@ -1,0 +1,26 @@
+# Render Blueprint — deploys the Golf Scoreboard as one free web service.
+#
+# In Render: New → Blueprint → connect this repo. Render reads everything below,
+# so the only thing you enter by hand is the two secret values
+# (DATABASE_URL and ADMIN_PASSWORD), which Render will prompt you for.
+services:
+  - type: web
+    name: golf-scoreboard
+    runtime: node
+    plan: free
+    branch: main
+    autoDeploy: true # redeploy automatically on every push to main
+    # Build the frontend + API, then create/update the database tables in Neon.
+    buildCommand: npm install -g pnpm && pnpm install && BASE_PATH=/ PORT=8080 pnpm build && pnpm --filter @workspace/db push-force
+    startCommand: pnpm --filter @workspace/api-server start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      # Secrets — Render prompts for these when you apply the blueprint.
+      - key: DATABASE_URL # your Neon direct (non-pooled) connection string
+        sync: false
+      - key: ADMIN_PASSWORD # a password you choose; required to manage tournaments
+        sync: false
