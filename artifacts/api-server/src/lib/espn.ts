@@ -91,6 +91,18 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
       const name = competitor.athlete?.displayName || competitor.athlete?.fullName || "Unknown";
       const scores: ESPNRoundScore[] = [];
 
+      // Determine cut/out status at the golfer level. Once the field reaches
+      // round 3+, ESPN stops advancing cut players, so their highest linescore
+      // period stays below the field's current round. A player who simply hasn't
+      // teed off in the current round still gets a linescore entry for it, so they
+      // are NOT flagged. (The old per-round "empty round > 2 = cut" rule wrongly
+      // flagged everyone who hadn't started round 3/4 yet.)
+      const golferPeriods = (competitor.linescores || [])
+        .map((l: { period: number }) => l.period)
+        .filter((p: number) => p >= 1 && p <= 4);
+      const golferMaxPeriod = golferPeriods.length ? Math.max(...golferPeriods) : 0;
+      const golferIsCut = maxRound >= 3 && golferMaxPeriod < maxRound;
+
       for (const linescore of (competitor.linescores || [])) {
         const roundNumber = linescore.period;
         if (roundNumber > 4) continue;
@@ -107,7 +119,7 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
         // Still push a "not started" entry so the DB upsert can clear any
         // stale isCut=true flags left over from a previous (buggy) sync.
         if (!hasDisplayValue) {
-          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: false, isWd: false, isDq: false, teeTime: null });
+          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: golferIsCut, isWd: false, isDq: false, teeTime: null });
           continue;
         }
 
@@ -119,9 +131,9 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
 
         const scoreToPar = parseScoreValue(displayValue);
 
-        // A golfer is cut only when displayValue EXISTS and is "-", holesCompleted
-        // is 0, and the round is beyond round 2 (cuts happen after R2).
-        const isCut = displayValue === "-" && holesCompleted === 0 && roundNumber > 2;
+        // Cut only if this golfer is out (golferIsCut) AND this specific round
+        // has no score — never null out a round they actually played.
+        const isCut = golferIsCut && holesCompleted === 0 && scoreToPar === null;
 
         // Extract tee time
         let teeTime: string | null = null;
