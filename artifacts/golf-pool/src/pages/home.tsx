@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { 
   useGetScoreboard, 
@@ -15,11 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
+import { ChampionBanner, Confetti } from "@/components/champion-celebration";
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"live" | "manual">("live");
-  
+  const [showConfetti, setShowConfetti] = useState(false);
+  const celebratedRef = useRef(false);
+
   const { data: scoreboard, isLoading } = useGetScoreboard({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query: { refetchInterval: 60000 } as any,
@@ -61,9 +64,22 @@ export default function Home() {
   };
 
   const activeTournament = scoreboard?.tournament;
+  const isFinal = activeTournament?.status === "completed";
+  const champions = (scoreboard?.leaderboard ?? []).filter((e) => e.rank === 1);
+
+  // Fire confetti once when the tournament goes Final (not on every 60s refetch).
+  useEffect(() => {
+    if (isFinal && !celebratedRef.current) {
+      celebratedRef.current = true;
+      setShowConfetti(true);
+      const t = setTimeout(() => setShowConfetti(false), 9000);
+      return () => clearTimeout(t);
+    }
+  }, [isFinal]);
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground p-4 md:p-8 font-sans pb-24">
+      {showConfetti && <Confetti />}
       <div className="max-w-7xl mx-auto space-y-8">
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border pb-6">
           <div>
@@ -91,6 +107,10 @@ export default function Home() {
             </Link>
           </div>
         </header>
+
+        {isFinal && champions.length > 0 && (
+          <ChampionBanner names={champions.map((c) => c.name)} toPar={champions[0].toPar ?? null} />
+        )}
 
         {!isLoading && !scoreboard ? (
           <div className="flex flex-col items-center gap-4 py-24 text-center">
