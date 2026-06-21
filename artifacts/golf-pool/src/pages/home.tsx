@@ -7,7 +7,7 @@ import {
   useUpdateManualScore,
   getGetScoreboardQueryKey
 } from "@workspace/api-client-react";
-import { formatScore } from "@/lib/score";
+import { formatScore, formatTeeTime } from "@/lib/score";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -336,7 +336,7 @@ export default function Home() {
                                         {formatScore(golfer.totalToPar)}
                                       </TableCell>
                                       <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                                        {golfer.isCut || golfer.isWd || golfer.isDq ? '-' : golfer.holesCompleted === 18 ? 'F' : golfer.holesCompleted > 0 ? golfer.holesCompleted : '-'}
+                                        {golfer.isCut || golfer.isWd || golfer.isDq ? '-' : golfer.holesCompleted === 18 ? 'F' : golfer.holesCompleted > 0 ? golfer.holesCompleted : golfer.teeTime ? formatTeeTime(golfer.teeTime) : '-'}
                                       </TableCell>
                                       {golfer.roundScores.map((score, i) => (
                                         <TableCell key={i} className={`text-right font-mono text-sm ${score !== null && score < 0 ? 'text-primary' : ''} ${golfer.roundIsPenalty[i] ? 'italic text-destructive' : ''}`}>
