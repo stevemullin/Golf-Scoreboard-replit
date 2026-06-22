@@ -40,7 +40,8 @@ export default function Admin() {
   const [newTourney, setNewTourney] = useState({ name: "", year: new Date().getFullYear(), espnId: "", cutSize: "" });
   const [pgaEvents, setPgaEvents] = useState<{ espnEventId: string; name: string; date: string; state: string | null }[]>([]);
   const [tierTourneyId, setTierTourneyId] = useState("");
-  const [tierRows, setTierRows] = useState<{ golferId: string; name: string; odds: number | null; tier: number }[]>([]);
+  const [tierList, setTierList] = useState<{ golferId: string; name: string; odds: number | null }[]>([]);
+  const [tierBreaks, setTierBreaks] = useState<number[]>([]); // up to 4 sorted indices where a new tier starts
   const [tierBusy, setTierBusy] = useState(false);
   React.useEffect(() => {
     if (!isAuthenticated) return;
@@ -170,9 +171,22 @@ export default function Admin() {
     );
   }
 
+  const tierAt = (i: number, breaks: number[]) => Math.min(5, 1 + breaks.filter((b) => b <= i).length);
+
+  // up to 4 distinct sorted break indices in [1, len-1]
+  const normalizeBreaks = (raw: number[], len: number): number[] => {
+    const set = new Set(raw.filter((b) => b >= 1 && b <= len - 1));
+    for (let k = 1; k <= 4 && set.size < 4 && len >= 5; k++) {
+      const p = Math.round((len * k) / 5);
+      if (p >= 1 && p <= len - 1) set.add(p);
+    }
+    return Array.from(set).sort((a, b) => a - b).slice(0, 4);
+  };
+
   const loadTiers = async (tid: string) => {
     setTierTourneyId(tid);
-    setTierRows([]);
+    setTierList([]);
+    setTierBreaks([]);
     if (!tid) return;
     try {
       const res = await fetch(`/api/admin/tiers?tournamentId=${tid}`);
@@ -181,7 +195,11 @@ export default function Admin() {
       const prob = (a: number | null) => (a == null ? -1 : a >= 0 ? 100 / (a + 100) : -a / (-a + 100));
       if (Array.isArray(rows) && rows.length) {
         rows.sort((a: any, b: any) => a.tier - b.tier || prob(b.odds) - prob(a.odds));
-        setTierRows(rows.map((r: any) => ({ golferId: r.golferId, name: r.name, odds: r.odds ?? null, tier: r.tier })));
+        const list = rows.map((r: any) => ({ golferId: r.golferId, name: r.name, odds: r.odds ?? null }));
+        const breaks: number[] = [];
+        for (let i = 1; i < rows.length; i++) if (rows[i].tier !== rows[i - 1].tier) breaks.push(i);
+        setTierList(list);
+        setTierBreaks(normalizeBreaks(breaks, list.length));
       }
     } catch { /* ignore */ }
   };
@@ -201,20 +219,16 @@ export default function Admin() {
         toast({ title: "Couldn't build tiers", description: data?.error || "", variant: "destructive" });
         return;
       }
-      const breaks: number[] = data.suggestedBreaks || [];
-      const tierFor = (i: number) => Math.min(5, 1 + breaks.filter((b) => i >= b).length);
-      setTierRows([
-        ...data.matched.map((m: any, i: number) => ({ golferId: m.golferId, name: m.name, odds: m.odds, tier: tierFor(i) })),
-        ...data.unmatched.map((u: any) => ({ golferId: u.golferId, name: u.name, odds: null, tier: 5 })),
-      ]);
+      const list = [
+        ...data.matched.map((m: any) => ({ golferId: m.golferId, name: m.name, odds: m.odds })),
+        ...data.unmatched.map((u: any) => ({ golferId: u.golferId, name: u.name, odds: null })),
+      ];
+      setTierList(list);
+      setTierBreaks(normalizeBreaks(data.suggestedBreaks || [], list.length));
       if (data.matched.length === 0) {
-        toast({
-          title: "No odds posted for this event",
-          description: "A major is only priced from ~3 weeks before until it ends. Right now just the upcoming major (The Open) has odds. All golfers placed in T5.",
-          variant: "destructive",
-        });
+        toast({ title: "No odds posted for this event", description: "A major is only priced from ~3 weeks before until it ends. Right now just the upcoming major (The Open) has odds.", variant: "destructive" });
       } else {
-        toast({ title: "Tiers built from odds", description: `${data.matched.length} matched · ${data.unmatched.length} unmatched → T5` });
+        toast({ title: "Tiers built from odds", description: `${data.matched.length} matched · ${data.unmatched.length} unmatched (T5)` });
       }
     } catch {
       toast({ title: "Could not reach server", variant: "destructive" });
@@ -223,21 +237,28 @@ export default function Admin() {
     }
   };
 
-  const setTier = (golferId: string, tier: number) =>
-    setTierRows((rows) => rows.map((r) => (r.golferId === golferId ? { ...r, tier } : r)));
+  // move the divider nearest to gap p (before golfer index p) to p
+  const moveBreakNear = (p: number) => {
+    setTierBreaks((breaks) => {
+      if (breaks.includes(p)) return breaks;
+      if (breaks.length < 4) return Array.from(new Set([...breaks, p])).sort((a, b) => a - b);
+      let nearest = 0;
+      for (let i = 1; i < breaks.length; i++) {
+        if (Math.abs(breaks[i]! - p) < Math.abs(breaks[nearest]! - p)) nearest = i;
+      }
+      return Array.from(new Set(breaks.map((b, i) => (i === nearest ? p : b)))).sort((a, b) => a - b);
+    });
+  };
 
   const saveTiers = async () => {
-    if (!tierTourneyId || !tierRows.length) return;
+    if (!tierTourneyId || !tierList.length) return;
     setTierBusy(true);
     try {
+      const assignments = tierList.map((g, i) => ({ golferId: g.golferId, tier: tierAt(i, tierBreaks), odds: g.odds }));
       const res = await fetch("/api/admin/tiers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tournamentId: tierTourneyId,
-          assignments: tierRows.map((r) => ({ golferId: r.golferId, tier: r.tier, odds: r.odds })),
-          password,
-        }),
+        body: JSON.stringify({ tournamentId: tierTourneyId, assignments, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -556,37 +577,49 @@ export default function Admin() {
                 <Button onClick={buildTiers} disabled={!tierTourneyId || tierBusy} className="uppercase font-bold tracking-wider">
                   {tierBusy ? "Working…" : "Build from odds"}
                 </Button>
-                <Button onClick={saveTiers} disabled={!tierTourneyId || !tierRows.length || tierBusy} variant="outline" className="uppercase font-bold tracking-wider border-border">
+                <Button onClick={saveTiers} disabled={!tierTourneyId || !tierList.length || tierBusy} variant="outline" className="uppercase font-bold tracking-wider border-border">
                   Save tiers
                 </Button>
               </div>
-              {tierRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Pick a major and "Build from odds" to populate tiers (or it loads saved tiers automatically).</p>
+              {tierList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Pick a major and "Build from odds" to populate the list (or it loads saved tiers automatically).</p>
               ) : (
-                <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
-                  {[1, 2, 3, 4, 5].map((tier) => {
-                    const p = (x: number | null) => (x == null ? -1 : x >= 0 ? 100 / (x + 100) : -x / (-x + 100));
-                    const rows = tierRows.filter((r) => r.tier === tier).sort((a, b) => p(b.odds) - p(a.odds));
-                    return (
-                      <div key={tier}>
-                        <div className="text-xs font-bold uppercase tracking-wider text-primary mb-1">T{tier} <span className="text-muted-foreground">({rows.length})</span></div>
-                        <div className="space-y-1">
-                          {rows.map((r) => (
-                            <div key={r.golferId} className="flex items-center justify-between gap-2 text-sm bg-background rounded px-2 py-1 border border-border/40">
-                              <span className="truncate">{r.name}</span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-mono text-xs text-muted-foreground w-12 text-right">{r.odds != null ? (r.odds > 0 ? `+${r.odds}` : `${r.odds}`) : "—"}</span>
-                                <select value={r.tier} onChange={(e) => setTier(r.golferId, parseInt(e.target.value))} className="bg-input border border-border rounded text-xs px-1 py-0.5">
-                                  {[1, 2, 3, 4, 5].map((t) => (<option key={t} value={t}>T{t}</option>))}
-                                </select>
-                              </div>
-                            </div>
-                          ))}
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Players stay in odds order — click a gap (or a divider) to move the nearest of the 4 dividers there. Bigger odds jumps are highlighted. {" "}
+                    {[1, 2, 3, 4, 5].map((t) => `T${t}:${tierList.filter((_, i) => tierAt(i, tierBreaks) === t).length}`).join(" · ")}
+                  </p>
+                  <div className="max-h-[520px] overflow-y-auto rounded border border-border/40">
+                    {tierList.map((g, i) => {
+                      const t = tierAt(i, tierBreaks);
+                      const isBreak = tierBreaks.includes(i);
+                      const tierBg = ["", "bg-primary/10", "bg-sky-500/10", "bg-emerald-500/10", "bg-amber-500/10", "bg-muted/40"][t];
+                      const prob = (x: number | null) => (x == null ? null : x >= 0 ? 100 / (x + 100) : -x / (-x + 100));
+                      const prev = i > 0 ? tierList[i - 1] : null;
+                      const pa = prev ? prob(prev.odds) : null;
+                      const pc = prob(g.odds);
+                      const jump = pa != null && pc != null ? Math.round((pa - pc) * 1000) / 10 : null;
+                      return (
+                        <div key={g.golferId}>
+                          {i > 0 &&
+                            (isBreak ? (
+                              <button onClick={() => moveBreakNear(i)} className="w-full flex items-center justify-center gap-2 px-2 py-0.5 bg-primary/25 border-y border-primary/50 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                ── T{t} ──{jump != null ? <span className="text-primary/70 normal-case font-normal">jump {jump}%</span> : null}
+                              </button>
+                            ) : (
+                              <button onClick={() => moveBreakNear(i)} title="Move nearest divider here" className="w-full h-2 flex items-center group">
+                                <span className={`h-px w-full ${jump != null && jump >= 1 ? "bg-amber-500/50" : "bg-transparent"} group-hover:bg-primary/60`} />
+                              </button>
+                            ))}
+                          <div className={`flex items-center justify-between gap-2 text-sm px-2 py-1 ${tierBg}`}>
+                            <span className="truncate"><span className="text-muted-foreground text-xs mr-2 tabular-nums">{i + 1}</span>{g.name}</span>
+                            <span className="font-mono text-xs text-muted-foreground shrink-0">{g.odds != null ? (g.odds > 0 ? `+${g.odds}` : `${g.odds}`) : "—"}</span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
