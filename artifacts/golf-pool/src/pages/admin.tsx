@@ -38,6 +38,14 @@ export default function Admin() {
   const savePicks = useSavePicks();
 
   const [newTourney, setNewTourney] = useState({ name: "", year: new Date().getFullYear(), espnId: "" });
+  const [pgaEvents, setPgaEvents] = useState<{ espnEventId: string; name: string; date: string; state: string | null }[]>([]);
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/admin/events")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setPgaEvents(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [isAuthenticated]);
   const [newMember, setNewMember] = useState("");
   const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
   const [editingEspnValue, setEditingEspnValue] = useState("");
@@ -304,6 +312,22 @@ export default function Admin() {
               <div className="space-y-4">
                 <h3 className="font-bold uppercase text-sm text-muted-foreground">Create New</h3>
                 <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <Label>Pick from PGA schedule (optional)</Label>
+                    <Select onValueChange={(id) => {
+                      const ev = pgaEvents.find((e) => e.espnEventId === id);
+                      if (ev) setNewTourney({ name: ev.name, year: parseInt(ev.date.slice(0, 4)) || new Date().getFullYear(), espnId: ev.espnEventId });
+                    }}>
+                      <SelectTrigger><SelectValue placeholder={pgaEvents.length ? "Choose an event to autofill…" : "Loading PGA schedule…"} /></SelectTrigger>
+                      <SelectContent>
+                        {pgaEvents.map((e) => (
+                          <SelectItem key={e.espnEventId} value={e.espnEventId}>
+                            {e.name} — {e.date.slice(0, 10)}{e.state === "in" ? " (live)" : e.state === "post" ? " (done)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label>Tournament Name</Label>
                     <Input value={newTourney.name} onChange={e => setNewTourney({...newTourney, name: e.target.value})} placeholder="e.g. The Masters" />

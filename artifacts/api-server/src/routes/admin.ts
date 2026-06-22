@@ -10,7 +10,7 @@ import {
   manualScoresTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { fetchESPNField, fetchESPNScoreboard } from "../lib/espn";
+import { fetchESPNField, fetchESPNScoreboard, fetchESPNEvents } from "../lib/espn";
 import { refreshFromESPN } from "../lib/scoring";
 
 const router = Router();
@@ -378,6 +378,20 @@ router.get("/admin/picks/:tournamentId/:poolMemberId", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get member picks");
     res.status(500).json({ error: "Failed to get member picks" });
+  }
+});
+
+// GET /admin/events?year= - list PGA Tour events (id/name/date/state) to pick from
+router.get("/admin/events", async (req, res) => {
+  try {
+    const yearParam =
+      typeof req.query.year === "string" ? parseInt(req.query.year, 10) : NaN;
+    const year = Number.isFinite(yearParam) ? yearParam : new Date().getFullYear();
+    const events = await fetchESPNEvents(year);
+    res.json(events);
+  } catch (err) {
+    req.log.error({ err }, "Failed to list events");
+    res.status(500).json({ error: "Failed to list events" });
   }
 });
 

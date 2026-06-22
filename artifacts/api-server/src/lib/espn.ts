@@ -199,3 +199,33 @@ export async function fetchESPNField(espnEventId: string): Promise<ESPNGolfer[]>
     return [];
   }
 }
+
+export interface ESPNEventListItem {
+  espnEventId: string;
+  name: string;
+  date: string; // ISO date
+  state: string | null; // "pre" | "in" | "post"
+}
+
+// Lists the PGA Tour events for a season (id, name, date, state) so the admin
+// can pick an event instead of hunting for its ESPN id.
+export async function fetchESPNEvents(year: number): Promise<ESPNEventListItem[]> {
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${year}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) return [];
+    const data = (await response.json()) as any;
+    const events = (data.events ?? []) as any[];
+    return events
+      .map((e) => ({
+        espnEventId: String(e.id),
+        name: String(e.name ?? ""),
+        date: String(e.date ?? ""),
+        state: e?.status?.type?.state ?? null,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch ESPN events");
+    return [];
+  }
+}
