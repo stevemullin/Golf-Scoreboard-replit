@@ -15,8 +15,11 @@ services:
     # the cosmetic "esbuild build script ignored" gate, which "|| true" survives —
     # esbuild still works via its @esbuild/linux-x64 package. Typecheck runs as a
     # hard gate (a failing type error fails the build, leaving the live site up),
-    # then we build the two packages the app serves and push the DB schema.
-    buildCommand: npm install -g pnpm@10 && (pnpm install || true) && (pnpm rebuild esbuild || true) && pnpm typecheck && BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build && pnpm --filter @workspace/db push-force
+    # then build the two served packages, run idempotent column migrations, and
+    # best-effort drizzle push for fresh-DB table creation (push stalls on
+    # interactive prompts in CI, so it can't be trusted for column changes — hence
+    # the explicit migrate step; "|| true" keeps its flakiness from failing builds).
+    buildCommand: npm install -g pnpm@10 && (pnpm install || true) && (pnpm rebuild esbuild || true) && pnpm typecheck && BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build && pnpm --filter @workspace/db migrate && (pnpm --filter @workspace/db push-force || true)
     startCommand: pnpm --filter @workspace/api-server start
     healthCheckPath: /api/healthz
     envVars:
