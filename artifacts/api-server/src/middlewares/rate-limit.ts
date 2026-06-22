@@ -25,7 +25,16 @@ export function rateLimit(opts: { windowMs: number; max: number }) {
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const now = Date.now();
-    const key = req.ip || req.socket.remoteAddress || "unknown";
+    // Key on the real client IP. Behind Render's proxy, req.ip can resolve to a
+    // varying intermediate proxy address (depending on trust-proxy hops), which
+    // would scatter requests across buckets and defeat the limit. The leftmost
+    // X-Forwarded-For entry is the original client, so prefer it.
+    const xff = req.headers["x-forwarded-for"];
+    const key =
+      (typeof xff === "string" && xff.trim() ? xff.split(",")[0]!.trim() : "") ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      "unknown";
 
     let bucket = buckets.get(key);
     if (!bucket || now > bucket.resetAt) {
