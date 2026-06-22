@@ -174,6 +174,28 @@ export default function Admin() {
   const apiErr = (e: unknown) => (e as any)?.data?.error || (e as any)?.message || "An error occurred";
   const isUnauth = (e: unknown) => (e as any)?.status === 401 || (e as any)?.data?.error === "Invalid password";
 
+  // Must be above the early return below — hooks have to run on every render.
+  const loadAdminMembers = React.useCallback(() => {
+    if (!password) return;
+    fetch("/api/admin/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, tournamentId: activeTournament?.id }),
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => {
+        if (Array.isArray(rows)) {
+          setAdminMembers(rows);
+          setEmailDraft(Object.fromEntries(rows.map((m: { id: string; email: string | null }) => [m.id, m.email || ""])));
+        }
+      })
+      .catch(() => {});
+  }, [password, activeTournament?.id]);
+
+  React.useEffect(() => {
+    if (isAuthenticated) loadAdminMembers();
+  }, [isAuthenticated, loadAdminMembers]);
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-background p-4">
@@ -400,27 +422,6 @@ export default function Admin() {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
-
-  const loadAdminMembers = React.useCallback(() => {
-    if (!password) return;
-    fetch("/api/admin/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, tournamentId: activeTournament?.id }),
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => {
-        if (Array.isArray(rows)) {
-          setAdminMembers(rows);
-          setEmailDraft(Object.fromEntries(rows.map((m: { id: string; email: string | null }) => [m.id, m.email || ""])));
-        }
-      })
-      .catch(() => {});
-  }, [password, activeTournament?.id]);
-
-  React.useEffect(() => {
-    if (isAuthenticated) loadAdminMembers();
-  }, [isAuthenticated, loadAdminMembers]);
 
   const handleCreateMember = () => {
     if (!newMember) return;
