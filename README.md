@@ -64,8 +64,10 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
     and a yellow/red **RISK** badge on at-risk golfers.
   - **Golfer Tiers** (majors) — "Build from odds" pulls the major's winner odds
     (The-Odds-API), orders the field, and splits it into 5 tiers at the biggest
-    odds gaps; the splits and any golfer are editable, unmatched players default
-    to T5. (Tiered *pick selection* is the next phase.)
+    odds gaps; the splits are set by moving 4 dividers, unmatched players default
+    to T5. When a tournament has tiers, **pick entry switches to tiered slots**
+    (1 per tier + a 6th from T4/T5), enforced in the UI and on save; re-tiering
+    flags any picks it invalidates.
   - Force an ESPN refresh; **download a full JSON backup**.
 - **Champion celebration** — banner + confetti when a tournament goes Final.
 
