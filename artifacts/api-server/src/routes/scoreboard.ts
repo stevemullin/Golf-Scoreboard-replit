@@ -5,6 +5,8 @@ import {
   poolMembersTable,
   manualScoresTable,
   apiCacheTable,
+  pickSubmissionsTable,
+  teamPicksTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getOrRefreshScoreboard, getProjectedCut, refreshFromESPN } from "../lib/scoring";
@@ -45,6 +47,30 @@ router.get("/scoreboard", async (req, res) => {
       ? new Date(lastFetched.getTime() + intervalMinutes * 60 * 1000).toISOString()
       : null;
 
+    // Picks are hidden until the event starts (round 1) or the pick deadline
+    // passes — fairness, so nobody can study others' teams in advance. Until
+    // then we send only a masked roster (who has submitted), never the golfers.
+    const lockAt = tournament!.picksLockAt;
+    const picksRevealed =
+      (tournament!.currentRound ?? 0) >= 1 ||
+      tournament!.status === "completed" ||
+      (!!lockAt && Date.now() >= lockAt.getTime());
+
+    const members = await db.select().from(poolMembersTable).orderBy(poolMembersTable.name);
+    const subs = await db.select({ poolMemberId: pickSubmissionsTable.poolMemberId })
+      .from(pickSubmissionsTable).where(eq(pickSubmissionsTable.tournamentId, tournament!.id));
+    const submittedSet = new Set(subs.map((s) => s.poolMemberId));
+    const pickRows = await db.select({ poolMemberId: teamPicksTable.poolMemberId })
+      .from(teamPicksTable).where(eq(teamPicksTable.tournamentId, tournament!.id));
+    const pickCounts = new Map<string, number>();
+    for (const p of pickRows) pickCounts.set(p.poolMemberId, (pickCounts.get(p.poolMemberId) ?? 0) + 1);
+    const roster = members.map((m) => ({
+      poolMemberId: m.id,
+      name: m.name,
+      submitted: submittedSet.has(m.id),
+      pickCount: pickCounts.get(m.id) ?? 0,
+    }));
+
     res.json({
       tournament: {
         id: tournament!.id,
@@ -55,13 +81,16 @@ router.get("/scoreboard", async (req, res) => {
         currentRound: tournament!.currentRound,
         isActive: tournament!.isActive,
         cutSize: tournament!.cutSize,
+        picksLockAt: lockAt?.toISOString() ?? null,
         createdAt: tournament!.createdAt.toISOString(),
       },
       lastUpdated: lastFetched?.toISOString() || null,
       nextUpdate,
       refreshIntervalMinutes: intervalMinutes,
       projectedCut,
-      leaderboard,
+      picksRevealed,
+      roster,
+      leaderboard: picksRevealed ? leaderboard : [],
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get scoreboard");

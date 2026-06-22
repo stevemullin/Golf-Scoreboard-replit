@@ -71,6 +71,13 @@ export default function Home() {
     (scoreboard as unknown as { projectedCut?: number | null } | undefined)?.projectedCut ?? null;
   const cutSize =
     (scoreboard?.tournament as unknown as { cutSize?: number | null } | undefined)?.cutSize ?? null;
+  // Self-service masking: before reveal the server sends no picks, only a roster.
+  const picksRevealed =
+    (scoreboard as unknown as { picksRevealed?: boolean } | undefined)?.picksRevealed ?? true;
+  const roster =
+    (scoreboard as unknown as { roster?: { poolMemberId: string; name: string; submitted: boolean; pickCount: number }[] } | undefined)?.roster ?? [];
+  const picksLockAt =
+    (scoreboard?.tournament as unknown as { picksLockAt?: string | null } | undefined)?.picksLockAt ?? null;
 
   // Fire confetti once when the tournament goes Final (not on every 60s refetch).
   useEffect(() => {
@@ -190,6 +197,42 @@ export default function Home() {
               </div>
             </div>
           </div>
+        ) : scoreboard && !picksRevealed ? (
+          <main className="space-y-6">
+            <Card className="bg-card border-card-border rounded-xl shadow-lg overflow-hidden">
+              <div className="bg-black/40 px-4 py-4 border-b border-border">
+                <h2 className="font-bold uppercase tracking-wider text-primary">Picks are hidden until {picksLockAt ? "the deadline" : "the tournament starts"}</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {picksLockAt
+                    ? `Everyone's picks reveal at ${new Date(picksLockAt).toLocaleString()}.`
+                    : "Picks reveal once the first round begins."}{" "}
+                  Use your personal link to make or edit your own.
+                </p>
+              </div>
+              <div className="divide-y divide-border/40">
+                {roster.map((m) => (
+                  <div key={m.poolMemberId} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-bold truncate">{m.name}</span>
+                      {m.submitted ? (
+                        <span className="text-[10px] rounded bg-primary px-2 py-0.5 text-primary-foreground uppercase tracking-wider shrink-0">Submitted ✓</span>
+                      ) : (
+                        <span className="text-[10px] rounded bg-yellow-500/20 text-yellow-500 px-2 py-0.5 uppercase tracking-wider shrink-0">No picks yet</span>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 font-mono text-muted-foreground text-sm select-none shrink-0">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <span key={i}>{m.submitted ? "•••" : "—"}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {roster.length === 0 && (
+                  <div className="px-4 py-6 text-center text-muted-foreground text-sm">No pool members yet.</div>
+                )}
+              </div>
+            </Card>
+          </main>
         ) : (
           <main className="space-y-12">
             <Card className="bg-card border-card-border overflow-hidden rounded-xl shadow-xl shadow-black/50">
