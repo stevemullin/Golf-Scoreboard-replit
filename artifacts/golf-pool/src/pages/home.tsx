@@ -78,6 +78,7 @@ export default function Home() {
       const t = setTimeout(() => setShowConfetti(false), 9000);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [isFinal]);
 
   return (
