@@ -51,10 +51,12 @@ router.get("/scoreboard", async (req, res) => {
     // passes — fairness, so nobody can study others' teams in advance. Until
     // then we send only a masked roster (who has submitted), never the golfers.
     const lockAt = tournament!.picksLockAt;
-    const picksRevealed =
-      (tournament!.currentRound ?? 0) >= 1 ||
-      tournament!.status === "completed" ||
-      (!!lockAt && Date.now() >= lockAt.getTime());
+    // The admin-set lock is the source of truth for when picks reveal. Without a
+    // lock, fall back to "revealed once the event is underway" so traditional
+    // admin-managed tournaments still show picks.
+    const picksRevealed = lockAt
+      ? Date.now() >= lockAt.getTime()
+      : (tournament!.currentRound ?? 0) >= 1 || tournament!.status === "completed";
 
     const members = await db.select().from(poolMembersTable).orderBy(poolMembersTable.name);
     const subs = await db.select({ poolMemberId: pickSubmissionsTable.poolMemberId })

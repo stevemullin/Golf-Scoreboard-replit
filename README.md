@@ -73,9 +73,10 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
     makes/edits their own tiered picks until an admin-set lock time, after which
     they freeze (admin can still edit). Admin sees who has submitted; pick
     *contents* stay hidden before lock (fairness). The **public scoreboard also
-    masks everyone's picks** (shows only a submitted ✓/✗ roster) until the event
-    starts (round 1) or the deadline passes — the server withholds the picks, so
-    they can't be seen via the API either. Email reminders are a later phase.
+    masks everyone's picks** (shows only a submitted ✓/✗ roster) until the
+    admin-set deadline (or, if no deadline is set, until round 1 begins) — the
+    server withholds the picks, so they can't be seen via the API either. Email
+    reminders are a later phase.
   - Force an ESPN refresh; **download a full JSON backup**.
 - **Champion celebration** — banner + confetti when a tournament goes Final.
 
