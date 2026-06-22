@@ -1,12 +1,15 @@
 import express, { type Express } from "express";
-import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
 import router from "./routes";
+import { rateLimit } from "./middlewares/rate-limit";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+
+// Behind Render's proxy — needed so req.ip reflects the real client for rate limiting.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -27,9 +30,12 @@ app.use(
     },
   }),
 );
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Frontend is served same-origin by this server, so CORS isn't needed.
+// Brute-force guard on the password-protected admin endpoints.
+app.use("/api/admin", rateLimit({ windowMs: 60_000, max: 30 }));
 
 app.use("/api", router);
 

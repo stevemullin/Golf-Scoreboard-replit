@@ -66,6 +66,9 @@ export default function Home() {
   const activeTournament = scoreboard?.tournament;
   const isFinal = activeTournament?.status === "completed";
   const champions = (scoreboard?.leaderboard ?? []).filter((e) => e.rank === 1);
+  // projectedCut isn't in the generated client type yet, so read it loosely.
+  const projectedCut =
+    (scoreboard as unknown as { projectedCut?: number | null } | undefined)?.projectedCut ?? null;
 
   // Fire confetti once when the tournament goes Final (not on every 60s refetch).
   useEffect(() => {
@@ -90,6 +93,9 @@ export default function Home() {
               <span>{activeTournament?.status === "completed" ? "Final" : `Round ${activeTournament?.currentRound || 1}`}</span>
               {scoreboard?.lastUpdated && (
                 <span>| Updated: {new Date(scoreboard.lastUpdated).toLocaleTimeString()}</span>
+              )}
+              {projectedCut != null && (
+                <span>| Proj. cut: {formatScore(projectedCut)}</span>
               )}
             </div>
           </div>
@@ -350,6 +356,9 @@ export default function Home() {
                                           {golfer.isCut && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">CUT</Badge>}
                                           {golfer.isWd && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">WD</Badge>}
                                           {golfer.isDq && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">DQ</Badge>}
+                                          {projectedCut != null && golfer.totalToPar != null && golfer.totalToPar > projectedCut && !golfer.isCut && !golfer.isWd && !golfer.isDq && (
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500/60 text-amber-500">RISK</Badge>
+                                          )}
                                         </div>
                                       </TableCell>
                                       <TableCell className={`text-right font-mono font-bold ${golfer.totalToPar !== null && golfer.totalToPar < 0 ? 'text-primary' : ''}`}>

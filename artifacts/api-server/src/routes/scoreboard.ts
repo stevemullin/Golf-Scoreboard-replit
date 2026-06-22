@@ -7,7 +7,7 @@ import {
   apiCacheTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { getOrRefreshScoreboard, refreshFromESPN } from "../lib/scoring";
+import { getOrRefreshScoreboard, getProjectedCut, refreshFromESPN } from "../lib/scoring";
 
 const router = Router();
 
@@ -27,6 +27,7 @@ router.get("/scoreboard", async (req, res) => {
       .then(r => r[0]);
 
     const leaderboard = await getOrRefreshScoreboard(activeTournament.id);
+    const projectedCut = await getProjectedCut(activeTournament.id);
 
     // Refresh cache record for lastUpdated/nextUpdate
     const freshCache = await db.select().from(apiCacheTable)
@@ -58,6 +59,7 @@ router.get("/scoreboard", async (req, res) => {
       lastUpdated: lastFetched?.toISOString() || null,
       nextUpdate,
       refreshIntervalMinutes: intervalMinutes,
+      projectedCut,
       leaderboard,
     });
   } catch (err) {

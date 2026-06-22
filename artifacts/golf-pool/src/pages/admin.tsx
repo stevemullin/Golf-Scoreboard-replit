@@ -96,6 +96,32 @@ export default function Admin() {
     setIsAuthenticated(false);
   };
 
+  const handleExport = async () => {
+    try {
+      const res = await fetch("/api/admin/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        toast({ title: "Backup failed", description: "Could not export data.", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `golf-pool-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Backup downloaded" });
+    } catch {
+      toast({ title: "Backup failed", description: "Could not reach server.", variant: "destructive" });
+    }
+  };
+
   const handle401 = () => {
     handleLogout();
     toast({ title: "Session expired", description: "Password may have changed. Please log in again.", variant: "destructive" });
@@ -261,6 +287,7 @@ export default function Admin() {
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border pb-6">
           <h1 className="text-3xl font-bold text-primary uppercase tracking-widest">Tournament Admin</h1>
           <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleExport} className="border-border">Backup</Button>
             <Button variant="outline" onClick={handleLogout} className="border-border">Logout</Button>
             <Link href="/" className="text-muted-foreground hover:text-primary uppercase tracking-widest font-bold text-sm">
               Scoreboard &rarr;

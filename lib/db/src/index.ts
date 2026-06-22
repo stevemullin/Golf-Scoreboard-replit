@@ -26,6 +26,42 @@ export const pool = new Pool({
   connectionTimeoutMillis: 30000,
 });
 
+// Retry transient connection failures — Neon waking from suspend can throw
+// "endpoint has been disabled" or a connect timeout on the first query. We wrap
+// only the promise-style query() that drizzle and our routes use; the callback
+// style is passed through untouched so we never break pg's internal callback
+// contract (that contract violation is the bug the old NeonRetryPool had).
+const RETRYABLE = [
+  "endpoint has been disabled",
+  "Enable it using the API and retry",
+  "timeout exceeded when trying to connect",
+  "Connection terminated",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+];
+const isRetryable = (err: unknown): boolean => {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return RETRYABLE.some((m) => msg.includes(m));
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rawQuery = pool.query.bind(pool) as (...args: any[]) => any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(pool as any).query = (...args: any[]) => {
+  if (typeof args[args.length - 1] === "function") return rawQuery(...args); // callback form
+  const attempt = async (n: number): Promise<unknown> => {
+    try {
+      return await rawQuery(...args);
+    } catch (err) {
+      if (isRetryable(err) && n < 3) {
+        await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** n, 8000)));
+        return attempt(n + 1);
+      }
+      throw err;
+    }
+  };
+  return attempt(0);
+};
+
 // Prevent unhandled 'error' events on the pool from crashing the process.
 // Individual query errors are already caught in route handlers.
 pool.on("error", (err) => {

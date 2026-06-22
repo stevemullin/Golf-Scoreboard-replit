@@ -16,7 +16,7 @@ services:
     # esbuild still works via its @esbuild/linux-x64 package. We skip the root
     # "pnpm build" (its tsc typecheck needs types not present here) and build only
     # the two packages the app actually serves.
-    buildCommand: npm install -g pnpm@10 && (pnpm install || true) && (pnpm rebuild esbuild || true) && BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build && pnpm --filter @workspace/db push-force
+    buildCommand: npm install -g pnpm@10 && (pnpm install || true) && (pnpm rebuild esbuild || true) && (pnpm typecheck && echo TYPECHECK_OK || echo TYPECHECK_FAILED) && BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build && pnpm --filter @workspace/db push-force
     startCommand: pnpm --filter @workspace/api-server start
     healthCheckPath: /api/healthz
     envVars:

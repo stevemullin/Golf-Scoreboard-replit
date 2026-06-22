@@ -443,3 +443,43 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
 
   return entries;
 }
+
+// Projected cut line from the full field's through-2-rounds totals. "Top 65 and
+// ties" is the common PGA Tour rule; majors differ (the US Open is top 60), so
+// this is an approximation — adjust PROJECTED_CUT_SIZE if needed. Only meaningful
+// during rounds 1-2; returns null otherwise (after R2 the cut is already decided).
+const PROJECTED_CUT_SIZE = 65;
+export async function getProjectedCut(tournamentId: string): Promise<number | null> {
+  const tournament = await db
+    .select()
+    .from(tournamentsTable)
+    .where(eq(tournamentsTable.id, tournamentId))
+    .then((r) => r[0]);
+  if (!tournament) return null;
+  const currentRound = tournament.currentRound || 1;
+  if (currentRound < 1 || currentRound > 2) return null;
+  const through = Math.min(currentRound, 2);
+
+  const rows = await db
+    .select({
+      golferId: golferScoresTable.golferId,
+      roundNumber: golferScoresTable.roundNumber,
+      scoreToPar: golferScoresTable.scoreToPar,
+      isCut: golferScoresTable.isCut,
+      isWd: golferScoresTable.isWd,
+      isDq: golferScoresTable.isDq,
+    })
+    .from(golferScoresTable)
+    .where(eq(golferScoresTable.tournamentId, tournamentId));
+
+  const totals = new Map<string, number>();
+  for (const s of rows) {
+    if (s.roundNumber > through) continue;
+    if (s.isCut || s.isWd || s.isDq) continue;
+    if (s.scoreToPar === null) continue;
+    totals.set(s.golferId, (totals.get(s.golferId) ?? 0) + s.scoreToPar);
+  }
+  const sorted = [...totals.values()].sort((a, b) => a - b);
+  if (sorted.length < PROJECTED_CUT_SIZE) return null;
+  return sorted[PROJECTED_CUT_SIZE - 1]; // everyone with total <= this makes the cut
+}

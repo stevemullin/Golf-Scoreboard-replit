@@ -6,6 +6,8 @@ import {
   golfersTable,
   teamPicksTable,
   apiCacheTable,
+  golferScoresTable,
+  manualScoresTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { fetchESPNField, fetchESPNScoreboard } from "../lib/espn";
@@ -376,6 +378,42 @@ router.get("/admin/picks/:tournamentId/:poolMemberId", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get member picks");
     res.status(500).json({ error: "Failed to get member picks" });
+  }
+});
+
+// POST /admin/export - download a full JSON backup of all data
+router.post("/admin/export", async (req, res) => {
+  const { password } = req.body;
+  if (!checkPassword(password)) {
+    res.status(401).json({ error: "Invalid password" });
+    return;
+  }
+  try {
+    const [tournaments, poolMembers, golfers, teamPicks, golferScores, manualScores, apiCache] =
+      await Promise.all([
+        db.select().from(tournamentsTable),
+        db.select().from(poolMembersTable),
+        db.select().from(golfersTable),
+        db.select().from(teamPicksTable),
+        db.select().from(golferScoresTable),
+        db.select().from(manualScoresTable),
+        db.select().from(apiCacheTable),
+      ]);
+    const dump = {
+      exportedAt: new Date().toISOString(),
+      tournaments,
+      poolMembers,
+      golfers,
+      teamPicks,
+      golferScores,
+      manualScores,
+      apiCache,
+    };
+    res.setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify(dump, null, 2));
+  } catch (err) {
+    req.log.error({ err }, "Failed to export data");
+    res.status(500).json({ error: "Failed to export data" });
   }
 });
 
