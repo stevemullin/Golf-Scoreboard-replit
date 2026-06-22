@@ -16,6 +16,7 @@ import { fetchESPNField, fetchESPNScoreboard, fetchESPNEvents } from "../lib/esp
 import { refreshFromESPN } from "../lib/scoring";
 import { majorSportKey, fetchMajorOdds, normalizeName } from "../lib/odds";
 import { validateTieredPicks } from "../lib/tier-rules";
+import { sendPickReminders } from "../lib/reminders";
 
 const router = Router();
 
@@ -298,6 +299,22 @@ router.post("/admin/members", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to list members");
     res.status(500).json({ error: "Failed to list members" });
+  }
+});
+
+// POST /admin/send-reminders - email non-submitters their pick link now ("Nudge")
+router.post("/admin/send-reminders", async (req, res) => {
+  try {
+    const { password, baseUrl } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    const result = await sendPickReminders(typeof baseUrl === "string" ? baseUrl : undefined);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to send reminders");
+    res.status(500).json({ error: "Failed to send reminders" });
   }
 });
 

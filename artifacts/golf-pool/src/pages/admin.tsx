@@ -57,6 +57,7 @@ export default function Admin() {
   const [adminMembers, setAdminMembers] = useState<{ id: string; name: string; email: string | null; accessToken: string; submitted: boolean; pickCount: number }[]>([]);
   const [emailDraft, setEmailDraft] = useState<{ [id: string]: string }>({});
   const [lockDraft, setLockDraft] = useState<{ [id: string]: string }>({});
+  const [nudging, setNudging] = useState(false);
   const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
   const [editingEspnValue, setEditingEspnValue] = useState("");
   
@@ -471,6 +472,26 @@ export default function Admin() {
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
 
+  const sendReminders = () => {
+    setNudging(true);
+    fetch("/api/admin/send-reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, baseUrl: window.location.origin }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) { handle401(); return; }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+          toast({ title: "No reminders sent", description: d.reason || "Failed", variant: "destructive" });
+          return;
+        }
+        toast({ title: `Reminders sent: ${d.sent}`, description: `${d.alreadySubmitted} already in · ${d.skippedNoEmail} have no email on file` });
+      })
+      .catch(() => toast({ title: "Could not reach server", variant: "destructive" }))
+      .finally(() => setNudging(false));
+  };
+
   const handleSetLock = (tournamentId: string, localValue: string) => {
     const iso = localValue ? new Date(localValue).toISOString() : null;
     fetch(`/api/admin/tournament/${tournamentId}/lock`, {
@@ -816,11 +837,16 @@ export default function Admin() {
                 </div>
 
                 <div className="space-y-2 pt-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <h3 className="font-bold uppercase text-sm text-muted-foreground">Members</h3>
-                    {activeTournament && adminMembers.length > 0 && (
-                      <span className="text-xs text-muted-foreground">Submitted: {adminMembers.filter(m => m.submitted).length}/{adminMembers.length}</span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {activeTournament && adminMembers.length > 0 && (
+                        <span className="text-xs text-muted-foreground">Submitted: {adminMembers.filter(m => m.submitted).length}/{adminMembers.length}</span>
+                      )}
+                      <Button size="sm" variant="outline" onClick={sendReminders} disabled={nudging} className="h-7 text-xs uppercase tracking-wider">
+                        {nudging ? "Sending…" : "Nudge now"}
+                      </Button>
+                    </div>
                   </div>
                   {adminMembers.length === 0 && <span className="text-sm text-muted-foreground">No members added yet</span>}
                   {adminMembers.map(m => (

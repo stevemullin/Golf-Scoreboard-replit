@@ -75,8 +75,12 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
     *contents* stay hidden before lock (fairness). The **public scoreboard also
     masks everyone's picks** (shows only a submitted ✓/✗ roster) until the
     admin-set deadline (or, if no deadline is set, until round 1 begins) — the
-    server withholds the picks, so they can't be seen via the API either. Email
-    reminders are a later phase.
+    server withholds the picks, so they can't be seen via the API either.
+  - **Pick reminders (email)** — a **Nudge now** button emails everyone who
+    hasn't submitted their personal pick link; the same can run daily, unattended,
+    via a free external cron hitting `/api/cron/reminders`. Only fires while picks
+    are open (tiers built, deadline set and in the future). Needs `SMTP_USER` /
+    `SMTP_PASS` (Gmail app-password) set in Render — without them it's a no-op.
   - Force an ESPN refresh; **download a full JSON backup**.
 - **Champion celebration** — banner + confetti when a tournament goes Final.
 
@@ -115,6 +119,8 @@ PATCH  /api/admin/pool-member/:id         update a member's email
 POST   /api/admin/tournament/:id/lock     set/clear participant pick deadline
 GET    /api/me/:token                     participant's own event + tiers + picks
 POST   /api/me/:token/picks               participant submits/updates own picks
+POST   /api/admin/send-reminders          email non-submitters their link ("Nudge")
+POST   /api/cron/reminders                automated reminders (X-Cron-Secret header)
 POST   /api/admin/refresh                 force ESPN refresh
 POST   /api/admin/export                  download full JSON backup
 ```
@@ -129,6 +135,10 @@ All `/api/admin/*` routes are rate-limited (30/min per IP) and gated by `ADMIN_P
 | `NODE_ENV` | `production` |
 | `NODE_VERSION` | `24` |
 | `ODDS_API_KEY` | [The-Odds-API](https://the-odds-api.com) key (free tier) — powers the Golfer Tiers odds fetch (majors only). |
+| `SMTP_USER` / `SMTP_PASS` | Gmail address + [app-password](https://myaccount.google.com/apppasswords) (needs 2FA) for pick-reminder emails. Optional — email is a no-op without them. |
+| `SMTP_FROM` | Optional From address (defaults to `SMTP_USER`). |
+| `CRON_SECRET` | Shared secret required (as `X-Cron-Secret`) to trigger `/api/cron/reminders`. |
+| `APP_URL` | Base URL used in links inside cron-sent emails (defaults to the live URL). |
 
 ## Hosting & deployment
 
@@ -149,6 +159,11 @@ A failed build leaves the current version live (zero downtime). **CI**
 **Keep-alive:** Render's free tier sleeps after 15 min idle and Neon suspends, so
 an UptimeRobot monitor pings `/api/healthz/db` every 5 minutes (keeps both warm —
 turn it on around tournament time).
+
+**Automated reminders:** point a free scheduler (e.g. [cron-job.org](https://cron-job.org))
+at `POST /api/cron/reminders` once a day during pick week, sending header
+`X-Cron-Secret: <CRON_SECRET>`. It emails everyone who hasn't submitted yet. (The
+admin **Nudge now** button does the same on demand.)
 
 ## Local development
 
