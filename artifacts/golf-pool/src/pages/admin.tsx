@@ -207,7 +207,15 @@ export default function Admin() {
         ...data.matched.map((m: any, i: number) => ({ golferId: m.golferId, name: m.name, odds: m.odds, tier: tierFor(i) })),
         ...data.unmatched.map((u: any) => ({ golferId: u.golferId, name: u.name, odds: null, tier: 5 })),
       ]);
-      toast({ title: "Tiers built from odds", description: `${data.matched.length} matched · ${data.unmatched.length} unmatched → T5` });
+      if (data.matched.length === 0) {
+        toast({
+          title: "No odds posted for this event",
+          description: "A major is only priced from ~3 weeks before until it ends. Right now just the upcoming major (The Open) has odds. All golfers placed in T5.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Tiers built from odds", description: `${data.matched.length} matched · ${data.unmatched.length} unmatched → T5` });
+      }
     } catch {
       toast({ title: "Could not reach server", variant: "destructive" });
     } finally {
