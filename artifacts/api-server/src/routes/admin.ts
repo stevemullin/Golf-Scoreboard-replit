@@ -8,10 +8,12 @@ import {
   apiCacheTable,
   golferScoresTable,
   manualScoresTable,
+  golferTiersTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { fetchESPNField, fetchESPNScoreboard, fetchESPNEvents } from "../lib/espn";
 import { refreshFromESPN } from "../lib/scoring";
+import { majorSportKey, fetchMajorOdds, normalizeName } from "../lib/odds";
 
 const router = Router();
 
@@ -411,6 +413,143 @@ router.post("/admin/tournament/:tournamentId/cut-size", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to update cut size");
     res.status(500).json({ error: "Failed to update cut size" });
+  }
+});
+
+// POST /admin/tiers/suggest - fetch the major's winner odds and match to the field
+router.post("/admin/tiers/suggest", async (req, res) => {
+  try {
+    const { tournamentId, password } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    const tournament = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId)).then((r) => r[0]);
+    if (!tournament) {
+      res.status(404).json({ error: "Tournament not found" });
+      return;
+    }
+    if (!tournament.espnEventId) {
+      res.status(400).json({ error: "Tournament has no ESPN event id" });
+      return;
+    }
+    const sportKey = majorSportKey(tournament.name);
+    if (!sportKey) {
+      res.status(400).json({ error: "Auto-odds only supports the 4 majors. Build tiers manually." });
+      return;
+    }
+
+    const field = await fetchESPNField(tournament.espnEventId);
+    const espnIds = field.map((f) => f.espnId);
+    const dbGolfers = espnIds.length
+      ? await db.select({ id: golfersTable.id, name: golfersTable.name }).from(golfersTable).where(inArray(golfersTable.espnId, espnIds))
+      : [];
+    const byNorm = new Map<string, { id: string; name: string }>();
+    for (const g of dbGolfers) byNorm.set(normalizeName(g.name), g);
+
+    const odds = await fetchMajorOdds(sportKey);
+    if (odds === null) {
+      res.status(502).json({ error: "Could not fetch odds (check ODDS_API_KEY / quota)" });
+      return;
+    }
+
+    const lastName = (n: string) => {
+      const p = normalizeName(n).split(" ");
+      return p[p.length - 1] ?? "";
+    };
+    const byLast = new Map<string, Array<{ id: string; name: string }>>();
+    for (const g of dbGolfers) {
+      const k = lastName(g.name);
+      if (!byLast.has(k)) byLast.set(k, []);
+      byLast.get(k)!.push(g);
+    }
+
+    const matched: Array<{ golferId: string; name: string; odds: number }> = [];
+    const matchedIds = new Set<string>();
+    const take = (g: { id: string; name: string }, odds: number) => {
+      if (!matchedIds.has(g.id)) {
+        matched.push({ golferId: g.id, name: g.name, odds });
+        matchedIds.add(g.id);
+      }
+    };
+    const pending: typeof odds = [];
+    for (const o of odds) {
+      const g = byNorm.get(normalizeName(o.name));
+      if (g) take(g, o.odds);
+      else pending.push(o);
+    }
+    // Fallback: unambiguous last-name match (handles "Alex" vs "Alexander" etc.)
+    for (const o of pending) {
+      const cand = (byLast.get(lastName(o.name)) ?? []).filter((g) => !matchedIds.has(g.id));
+      if (cand.length === 1) take(cand[0]!, o.odds);
+    }
+
+    const prob = (a: number) => (a >= 0 ? 100 / (a + 100) : -a / (-a + 100));
+    matched.sort((x, y) => prob(y.odds) - prob(x.odds));
+    const unmatched = dbGolfers.filter((g) => !matchedIds.has(g.id)).map((g) => ({ golferId: g.id, name: g.name }));
+
+    const suggestedBreaks = matched
+      .slice(1)
+      .map((m, i) => ({ index: i + 1, drop: prob(matched[i]!.odds) - prob(m.odds) }))
+      .sort((a, b) => b.drop - a.drop)
+      .slice(0, 4)
+      .map((g) => g.index)
+      .sort((a, b) => a - b);
+
+    res.json({ sportKey, matched, unmatched, suggestedBreaks });
+  } catch (err) {
+    req.log.error({ err }, "Failed to suggest tiers");
+    res.status(500).json({ error: "Failed to suggest tiers" });
+  }
+});
+
+// GET /admin/tiers?tournamentId= - current saved tiers (with golfer names)
+router.get("/admin/tiers", async (req, res) => {
+  try {
+    const tournamentId = typeof req.query.tournamentId === "string" ? req.query.tournamentId : "";
+    const rows = await db
+      .select({ golferId: golferTiersTable.golferId, name: golfersTable.name, tier: golferTiersTable.tier, odds: golferTiersTable.odds })
+      .from(golferTiersTable)
+      .innerJoin(golfersTable, eq(golferTiersTable.golferId, golfersTable.id))
+      .where(eq(golferTiersTable.tournamentId, tournamentId));
+    res.json(rows);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get tiers");
+    res.status(500).json({ error: "Failed to get tiers" });
+  }
+});
+
+// POST /admin/tiers - replace tier assignments for a tournament
+router.post("/admin/tiers", async (req, res) => {
+  try {
+    const { tournamentId, assignments, password } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    if (!tournamentId || !Array.isArray(assignments)) {
+      res.status(400).json({ error: "tournamentId and assignments[] are required" });
+      return;
+    }
+    const valid = assignments.filter(
+      (a: { golferId?: unknown; tier?: unknown }) =>
+        a && typeof a.golferId === "string" && [1, 2, 3, 4, 5].includes(Number(a.tier)),
+    );
+    await db.delete(golferTiersTable).where(eq(golferTiersTable.tournamentId, tournamentId));
+    if (valid.length) {
+      await db.insert(golferTiersTable).values(
+        valid.map((a: { golferId: string; tier: unknown; odds?: unknown }) => ({
+          tournamentId,
+          golferId: a.golferId,
+          tier: Number(a.tier),
+          odds: typeof a.odds === "number" ? a.odds : null,
+        })),
+      );
+    }
+    res.json({ saved: valid.length });
+  } catch (err) {
+    req.log.error({ err }, "Failed to save tiers");
+    res.status(500).json({ error: "Failed to save tiers" });
   }
 });
 

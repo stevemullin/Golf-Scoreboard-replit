@@ -62,13 +62,17 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
   - **Cut indicator** — set a per-tournament cut size (Top 50 Masters / 60 US Open
     / 70 PGA & Open, or off). During round 2 the board shows a projected cut line
     and a yellow/red **RISK** badge on at-risk golfers.
+  - **Golfer Tiers** (majors) — "Build from odds" pulls the major's winner odds
+    (The-Odds-API), orders the field, and splits it into 5 tiers at the biggest
+    odds gaps; the splits and any golfer are editable, unmatched players default
+    to T5. (Tiered *pick selection* is the next phase.)
   - Force an ESPN refresh; **download a full JSON backup**.
 - **Champion celebration** — banner + confetti when a tournament goes Final.
 
 ## Data model (Postgres)
 
 `tournaments`, `pool_members`, `golfers`, `golfer_scores`, `team_picks`,
-`manual_scores`, `api_cache`. Schema lives in `lib/db/src/schema/`.
+`manual_scores`, `api_cache`, `golfer_tiers`. Schema lives in `lib/db/src/schema/`.
 
 ## API endpoints
 
@@ -90,6 +94,9 @@ POST   /api/admin/picks                   set a member's 6 picks
 GET    /api/admin/picks/:tid/:memberId    get a member's picks
 GET    /api/admin/field?espnEventId=      golfer field for an event
 GET    /api/admin/events?year=            PGA schedule (for the picker)
+POST   /api/admin/tiers/suggest           fetch major odds + match to field
+GET    /api/admin/tiers?tournamentId=     saved tiers for a tournament
+POST   /api/admin/tiers                   save tier assignments
 POST   /api/admin/refresh                 force ESPN refresh
 POST   /api/admin/export                  download full JSON backup
 ```
@@ -103,6 +110,7 @@ All `/api/admin/*` routes are rate-limited (30/min per IP) and gated by `ADMIN_P
 | `ADMIN_PASSWORD` | Required — admin actions are blocked without it. Use a long value. |
 | `NODE_ENV` | `production` |
 | `NODE_VERSION` | `24` |
+| `ODDS_API_KEY` | [The-Odds-API](https://the-odds-api.com) key (free tier) — powers the Golfer Tiers odds fetch (majors only). |
 
 ## Hosting & deployment
 
