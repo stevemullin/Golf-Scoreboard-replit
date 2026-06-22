@@ -66,9 +66,11 @@ export default function Home() {
   const activeTournament = scoreboard?.tournament;
   const isFinal = activeTournament?.status === "completed";
   const champions = (scoreboard?.leaderboard ?? []).filter((e) => e.rank === 1);
-  // projectedCut isn't in the generated client type yet, so read it loosely.
+  // projectedCut / cutSize aren't in the generated client type yet, so read loosely.
   const projectedCut =
     (scoreboard as unknown as { projectedCut?: number | null } | undefined)?.projectedCut ?? null;
+  const cutSize =
+    (scoreboard?.tournament as unknown as { cutSize?: number | null } | undefined)?.cutSize ?? null;
 
   // Fire confetti once when the tournament goes Final (not on every 60s refetch).
   useEffect(() => {
@@ -96,7 +98,7 @@ export default function Home() {
                 <span>| Updated: {new Date(scoreboard.lastUpdated).toLocaleTimeString()}</span>
               )}
               {projectedCut != null && (
-                <span>| Proj. cut: {formatScore(projectedCut)}</span>
+                <span>| Projected cut{cutSize ? ` (Top ${cutSize})` : ""}: {formatScore(projectedCut)}</span>
               )}
             </div>
           </div>
@@ -357,8 +359,8 @@ export default function Home() {
                                           {golfer.isCut && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">CUT</Badge>}
                                           {golfer.isWd && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">WD</Badge>}
                                           {golfer.isDq && <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">DQ</Badge>}
-                                          {projectedCut != null && golfer.totalToPar != null && golfer.totalToPar > projectedCut && !golfer.isCut && !golfer.isWd && !golfer.isDq && (
-                                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500/60 text-amber-500">RISK</Badge>
+                                          {projectedCut != null && golfer.totalToPar != null && !golfer.isCut && !golfer.isWd && !golfer.isDq && (golfer.totalToPar - projectedCut) > -2 && (
+                                            <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${(golfer.totalToPar - projectedCut) > 2 ? "border-red-500/60 text-red-500" : "border-amber-500/60 text-amber-500"}`}>RISK</Badge>
                                           )}
                                         </div>
                                       </TableCell>

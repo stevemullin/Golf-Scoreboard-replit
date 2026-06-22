@@ -444,42 +444,66 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
   return entries;
 }
 
-// Projected cut line from the full field's through-2-rounds totals. "Top 65 and
-// ties" is the common PGA Tour rule; majors differ (the US Open is top 60), so
-// this is an approximation — adjust PROJECTED_CUT_SIZE if needed. Only meaningful
-// during rounds 1-2; returns null otherwise (after R2 the cut is already decided).
-const PROJECTED_CUT_SIZE = 65;
+// Projected cut line, configured per tournament via `cutSize` (50/60/70; null =
+// disabled). Returns the cut-line to-par score, but ONLY during the R2 window:
+// from when R1 is complete (every active golfer through 18) until R2 is complete
+// (every active golfer through 36). Outside that window — or when cutSize is
+// unset — returns null. The line is the current Nth-place total (R1 + live R2),
+// so it moves as R2 plays out.
 export async function getProjectedCut(tournamentId: string): Promise<number | null> {
   const tournament = await db
     .select()
     .from(tournamentsTable)
     .where(eq(tournamentsTable.id, tournamentId))
     .then((r) => r[0]);
-  if (!tournament) return null;
-  const currentRound = tournament.currentRound || 1;
-  if (currentRound < 1 || currentRound > 2) return null;
-  const through = Math.min(currentRound, 2);
+  if (!tournament || !tournament.cutSize) return null;
+  const cutSize = tournament.cutSize;
 
   const rows = await db
     .select({
       golferId: golferScoresTable.golferId,
       roundNumber: golferScoresTable.roundNumber,
       scoreToPar: golferScoresTable.scoreToPar,
-      isCut: golferScoresTable.isCut,
+      holesCompleted: golferScoresTable.holesCompleted,
       isWd: golferScoresTable.isWd,
       isDq: golferScoresTable.isDq,
     })
     .from(golferScoresTable)
     .where(eq(golferScoresTable.tournamentId, tournamentId));
 
-  const totals = new Map<string, number>();
+  type G = { r1: number | null; r1Holes: number; r2: number | null; r2Holes: number; out: boolean };
+  const byGolfer = new Map<string, G>();
   for (const s of rows) {
-    if (s.roundNumber > through) continue;
-    if (s.isCut || s.isWd || s.isDq) continue;
-    if (s.scoreToPar === null) continue;
-    totals.set(s.golferId, (totals.get(s.golferId) ?? 0) + s.scoreToPar);
+    let g = byGolfer.get(s.golferId);
+    if (!g) {
+      g = { r1: null, r1Holes: 0, r2: null, r2Holes: 0, out: false };
+      byGolfer.set(s.golferId, g);
+    }
+    if (s.isWd || s.isDq) g.out = true;
+    if (s.roundNumber === 1) { g.r1 = s.scoreToPar; g.r1Holes = s.holesCompleted; }
+    if (s.roundNumber === 2) { g.r2 = s.scoreToPar; g.r2Holes = s.holesCompleted; }
   }
-  const sorted = [...totals.values()].sort((a, b) => a - b);
-  if (sorted.length < PROJECTED_CUT_SIZE) return null;
-  return sorted[PROJECTED_CUT_SIZE - 1]; // everyone with total <= this makes the cut
+
+  // Window: every active (non-WD/DQ) golfer through 18 in R1, but not yet all through 18 in R2.
+  let r1Complete = true;
+  let r2Complete = true;
+  let activeCount = 0;
+  for (const g of byGolfer.values()) {
+    if (g.out) continue;
+    activeCount++;
+    if (g.r1Holes < 18) r1Complete = false;
+    if (g.r2Holes < 18) r2Complete = false;
+  }
+  if (activeCount < cutSize) return null;
+  if (!r1Complete || r2Complete) return null;
+
+  // Cut line = the Nth-place current total (R1 + live R2).
+  const totals: number[] = [];
+  for (const g of byGolfer.values()) {
+    if (g.out || g.r1Holes < 18) continue;
+    totals.push((g.r1 ?? 0) + (g.r2 ?? 0));
+  }
+  totals.sort((a, b) => a - b);
+  if (totals.length < cutSize) return null;
+  return totals[cutSize - 1] ?? null; // everyone with total <= this makes the cut
 }

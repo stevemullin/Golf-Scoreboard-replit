@@ -24,6 +24,12 @@ function checkPassword(password: string): boolean {
   return password === adminPassword;
 }
 
+// Only 50/60/70 are valid cut sizes; anything else (incl. empty) disables it.
+function normalizeCutSize(v: unknown): number | null {
+  const n = Number(v);
+  return n === 50 || n === 60 || n === 70 ? n : null;
+}
+
 // POST /admin/verify - Check password without side effects
 router.post("/admin/verify", (req, res) => {
   const { password } = req.body;
@@ -37,7 +43,7 @@ router.post("/admin/verify", (req, res) => {
 // POST /admin/tournament - Create tournament
 router.post("/admin/tournament", async (req, res) => {
   try {
-    const { name, year, espnEventId, refreshIntervalMinutes, password } = req.body;
+    const { name, year, espnEventId, refreshIntervalMinutes, cutSize, password } = req.body;
 
     if (!checkPassword(password)) {
       res.status(401).json({ error: "Invalid password" });
@@ -57,6 +63,7 @@ router.post("/admin/tournament", async (req, res) => {
       status: "upcoming",
       currentRound: 0,
       isActive: false,
+      cutSize: normalizeCutSize(cutSize),
     }).returning().then(r => r[0]);
 
     // Create api_cache entry
@@ -378,6 +385,32 @@ router.get("/admin/picks/:tournamentId/:poolMemberId", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get member picks");
     res.status(500).json({ error: "Failed to get member picks" });
+  }
+});
+
+// POST /admin/tournament/:tournamentId/cut-size - set/clear the cut size (50/60/70)
+router.post("/admin/tournament/:tournamentId/cut-size", async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const { cutSize, password } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    const updated = await db
+      .update(tournamentsTable)
+      .set({ cutSize: normalizeCutSize(cutSize) })
+      .where(eq(tournamentsTable.id, tournamentId))
+      .returning()
+      .then((r) => r[0]);
+    if (!updated) {
+      res.status(404).json({ error: "Tournament not found" });
+      return;
+    }
+    res.json({ id: updated.id, cutSize: updated.cutSize });
+  } catch (err) {
+    req.log.error({ err }, "Failed to update cut size");
+    res.status(500).json({ error: "Failed to update cut size" });
   }
 });
 

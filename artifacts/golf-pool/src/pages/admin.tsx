@@ -37,7 +37,7 @@ export default function Admin() {
   const forceRefresh = useForceRefresh();
   const savePicks = useSavePicks();
 
-  const [newTourney, setNewTourney] = useState({ name: "", year: new Date().getFullYear(), espnId: "" });
+  const [newTourney, setNewTourney] = useState({ name: "", year: new Date().getFullYear(), espnId: "", cutSize: "" });
   const [pgaEvents, setPgaEvents] = useState<{ espnEventId: string; name: string; date: string; state: string | null }[]>([]);
   React.useEffect(() => {
     if (!isAuthenticated) return;
@@ -167,19 +167,39 @@ export default function Admin() {
     );
   }
 
+  const handleSetCutSize = async (tournamentId: string, value: string) => {
+    try {
+      const res = await fetch(`/api/admin/tournament/${tournamentId}/cut-size`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cutSize: value === "off" ? null : parseInt(value), password }),
+      });
+      if (!res.ok) {
+        if (res.status === 401) { handle401(); return; }
+        toast({ title: "Could not update cut", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Cut updated" });
+      refetchTournaments();
+    } catch {
+      toast({ title: "Could not reach server", variant: "destructive" });
+    }
+  };
+
   const handleCreateTournament = () => {
     createTournament.mutate({
       data: {
         name: newTourney.name,
         year: newTourney.year,
         espnEventId: newTourney.espnId,
+        cutSize: newTourney.cutSize ? parseInt(newTourney.cutSize) : null,
         password
-      }
+      } as any
     }, {
       onSuccess: () => {
         toast({ title: "Tournament Created" });
         refetchTournaments();
-        setNewTourney({ name: "", year: new Date().getFullYear(), espnId: "" });
+        setNewTourney({ name: "", year: new Date().getFullYear(), espnId: "", cutSize: "" });
       },
       onError: (e: unknown) => {
         if (isUnauth(e)) { handle401(); return; }
@@ -316,7 +336,7 @@ export default function Admin() {
                     <Label>Pick from PGA schedule (optional)</Label>
                     <Select onValueChange={(id) => {
                       const ev = pgaEvents.find((e) => e.espnEventId === id);
-                      if (ev) setNewTourney({ name: ev.name, year: parseInt(ev.date.slice(0, 4)) || new Date().getFullYear(), espnId: ev.espnEventId });
+                      if (ev) setNewTourney((prev) => ({ ...prev, name: ev.name, year: parseInt(ev.date.slice(0, 4)) || new Date().getFullYear(), espnId: ev.espnEventId }));
                     }}>
                       <SelectTrigger><SelectValue placeholder={pgaEvents.length ? "Choose an event to autofill…" : "Loading PGA schedule…"} /></SelectTrigger>
                       <SelectContent>
@@ -342,6 +362,18 @@ export default function Admin() {
                       <Input value={newTourney.espnId} onChange={e => setNewTourney({...newTourney, espnId: e.target.value})} placeholder="e.g. 401580342" />
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Cut indicator (optional)</Label>
+                    <Select value={newTourney.cutSize || "off"} onValueChange={(v) => setNewTourney({ ...newTourney, cutSize: v === "off" ? "" : v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="off">Off (no cut indicator)</SelectItem>
+                        <SelectItem value="50">Top 50 — Masters</SelectItem>
+                        <SelectItem value="60">Top 60 — US Open</SelectItem>
+                        <SelectItem value="70">Top 70 — PGA &amp; The Open</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button onClick={handleCreateTournament} disabled={createTournament.isPending || !newTourney.name || !newTourney.espnId} className="uppercase font-bold tracking-wider">
                     {createTournament.isPending ? "Creating..." : "Create Tournament"}
                   </Button>
@@ -359,6 +391,15 @@ export default function Admin() {
                           <div className="text-xs text-muted-foreground">ESPN ID: {t.espnEventId || <span className="text-yellow-500">not set</span>}</div>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Select value={(t as any).cutSize != null ? String((t as any).cutSize) : "off"} onValueChange={(v) => handleSetCutSize(t.id, v)}>
+                            <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="off">Cut: Off</SelectItem>
+                              <SelectItem value="50">Top 50</SelectItem>
+                              <SelectItem value="60">Top 60</SelectItem>
+                              <SelectItem value="70">Top 70</SelectItem>
+                            </SelectContent>
+                          </Select>
                           {t.isActive ? (
                             <Badge className="bg-primary text-primary-foreground hover:bg-primary uppercase tracking-wider">Active</Badge>
                           ) : (

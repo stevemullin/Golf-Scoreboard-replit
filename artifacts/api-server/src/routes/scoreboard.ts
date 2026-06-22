@@ -54,6 +54,7 @@ router.get("/scoreboard", async (req, res) => {
         status: tournament!.status,
         currentRound: tournament!.currentRound,
         isActive: tournament!.isActive,
+        cutSize: tournament!.cutSize,
         createdAt: tournament!.createdAt.toISOString(),
       },
       lastUpdated: lastFetched?.toISOString() || null,
