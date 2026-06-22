@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # "|| true" survives the cosmetic esbuild build-script gate (same as the
+      # Render build); the typecheck/build steps below are the real gates.
+      - name: Install
+        run: pnpm install --no-frozen-lockfile || true
+
+      - name: Ensure esbuild native binary
+        run: pnpm rebuild esbuild || true
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: BASE_PATH=/ PORT=8080 pnpm --filter @workspace/golf-pool --filter @workspace/api-server run build
