@@ -335,8 +335,17 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
           if (r <= currentRound) {
             tournamentTotal += effectiveScore;
           }
+        } else if ((isCut || isWd || isDq) && r <= currentRound) {
+          // No row for this round, but the golfer is out (e.g. R4 after missing
+          // the cut — ESPN stops listing them). Apply the round penalty too, so
+          // cut golfers are penalized for R4 just like R3.
+          const penalty = maxScores[r] ?? 0;
+          scoreToPar = penalty;
+          effectiveScore = penalty;
+          isPenalty = true;
+          tournamentTotal += effectiveScore;
         }
-        // No row at all = future round not yet in the ESPN data — skip it.
+        // else: future round not yet in ESPN data — leave as not-started (0).
 
         roundData.push({
           roundNumber: r,

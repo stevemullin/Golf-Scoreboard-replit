@@ -18,6 +18,7 @@ router.get("/tournaments", async (req, res) => {
       status: t.status,
       currentRound: t.currentRound,
       isActive: t.isActive,
+      cutSize: t.cutSize,
       createdAt: t.createdAt.toISOString(),
     }));
 
