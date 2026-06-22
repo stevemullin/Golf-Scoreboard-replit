@@ -32,6 +32,29 @@ function normalizeCutSize(v: unknown): number | null {
   return n === 50 || n === 60 || n === 70 ? n : null;
 }
 
+// Tiered-pick rule: one golfer from each of T1/T2/T3, plus T4+T5 totaling three
+// with at least one each (i.e. a 6th from T4 or T5). All six distinct + tiered.
+function validateTieredPicks(
+  tierByGolfer: Map<string, number>,
+  golferIds: string[],
+): { valid: boolean; reason?: string } {
+  if (golferIds.length !== 6) return { valid: false, reason: "Need exactly 6 picks" };
+  if (new Set(golferIds).size !== 6) return { valid: false, reason: "Duplicate golfer in picks" };
+  const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const id of golferIds) {
+    const t = tierByGolfer.get(id);
+    if (!t) return { valid: false, reason: "A pick is not assigned to any tier" };
+    counts[t] = (counts[t] ?? 0) + 1;
+  }
+  if (counts[1] !== 1 || counts[2] !== 1 || counts[3] !== 1) {
+    return { valid: false, reason: "Need exactly one golfer from each of T1, T2 and T3" };
+  }
+  if (counts[4]! + counts[5]! !== 3 || counts[4]! < 1 || counts[5]! < 1) {
+    return { valid: false, reason: "Need one from T4 and one from T5, plus one extra from T4 or T5" };
+  }
+  return { valid: true };
+}
+
 // POST /admin/verify - Check password without side effects
 router.post("/admin/verify", (req, res) => {
   const { password } = req.body;
@@ -250,6 +273,20 @@ router.post("/admin/picks", async (req, res) => {
     if (golferIds.length !== 6) {
       res.status(400).json({ error: "Exactly 6 golfer picks are required" });
       return;
+    }
+
+    // If this tournament uses tiers, enforce the tier selection rules.
+    const pickTierRows = await db
+      .select({ golferId: golferTiersTable.golferId, tier: golferTiersTable.tier })
+      .from(golferTiersTable)
+      .where(eq(golferTiersTable.tournamentId, tournamentId));
+    if (pickTierRows.length > 0) {
+      const tierByGolfer = new Map(pickTierRows.map((r) => [r.golferId, r.tier]));
+      const v = validateTieredPicks(tierByGolfer, golferIds);
+      if (!v.valid) {
+        res.status(400).json({ error: v.reason });
+        return;
+      }
     }
 
     // Delete existing picks for this member/tournament
@@ -546,7 +583,27 @@ router.post("/admin/tiers", async (req, res) => {
         })),
       );
     }
-    res.json({ saved: valid.length });
+    // Re-validate existing picks against the new tiers (flag, don't break).
+    const tierByGolfer = new Map<string, number>(
+      valid.map((a: { golferId: string; tier: unknown }) => [a.golferId, Number(a.tier)]),
+    );
+    const picks = await db
+      .select({ poolMemberId: teamPicksTable.poolMemberId, golferId: teamPicksTable.golferId, memberName: poolMembersTable.name })
+      .from(teamPicksTable)
+      .innerJoin(poolMembersTable, eq(teamPicksTable.poolMemberId, poolMembersTable.id))
+      .where(eq(teamPicksTable.tournamentId, tournamentId));
+    const byMember = new Map<string, { name: string; ids: string[] }>();
+    for (const p of picks) {
+      if (!byMember.has(p.poolMemberId)) byMember.set(p.poolMemberId, { name: p.memberName, ids: [] });
+      byMember.get(p.poolMemberId)!.ids.push(p.golferId);
+    }
+    const warnings: string[] = [];
+    for (const m of byMember.values()) {
+      const v = validateTieredPicks(tierByGolfer, m.ids);
+      if (!v.valid) warnings.push(`${m.name}: ${v.reason}`);
+    }
+
+    res.json({ saved: valid.length, warnings });
   } catch (err) {
     req.log.error({ err }, "Failed to save tiers");
     res.status(500).json({ error: "Failed to save tiers" });

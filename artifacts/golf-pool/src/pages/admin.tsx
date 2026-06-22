@@ -71,15 +71,41 @@ export default function Admin() {
   });
 
   const [selectedGolfers, setSelectedGolfers] = useState<string[]>([]);
+  const [pickTiers, setPickTiers] = useState<{ golferId: string; name: string; tier: number }[]>([]);
+  const tieredMode = pickTiers.length > 0;
+  const [pickSlots, setPickSlots] = useState<{ [k: string]: string }>({ t1: "", t2: "", t3: "", t4: "", t5: "", extra: "" });
 
-  // Update selected golfers when picks change
+  // Load the selected tournament's tiers — its presence switches to tiered picks
   React.useEffect(() => {
-    if (existingPicks) {
-      setSelectedGolfers(existingPicks.map((p: { id: string }) => p.id));
-    } else {
+    if (!pickTourneyId) { setPickTiers([]); return; }
+    fetch(`/api/admin/tiers?tournamentId=${pickTourneyId}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => setPickTiers(Array.isArray(rows) ? rows : []))
+      .catch(() => setPickTiers([]));
+  }, [pickTourneyId]);
+
+  // Populate selections when picks (or tiers) change
+  React.useEffect(() => {
+    if (!existingPicks) {
       setSelectedGolfers([]);
+      setPickSlots({ t1: "", t2: "", t3: "", t4: "", t5: "", extra: "" });
+      return;
     }
-  }, [existingPicks]);
+    setSelectedGolfers((existingPicks as { id: string }[]).map((p) => p.id));
+    if (pickTiers.length) {
+      const tierOf = new Map(pickTiers.map((g) => [g.golferId, g.tier]));
+      const slots: { [k: string]: string } = { t1: "", t2: "", t3: "", t4: "", t5: "", extra: "" };
+      for (const p of existingPicks as { id: string }[]) {
+        const t = tierOf.get(p.id);
+        if (t === 1) slots.t1 = p.id;
+        else if (t === 2) slots.t2 = p.id;
+        else if (t === 3) slots.t3 = p.id;
+        else if (t === 4) { if (!slots.t4) slots.t4 = p.id; else slots.extra = p.id; }
+        else if (t === 5) { if (!slots.t5) slots.t5 = p.id; else slots.extra = p.id; }
+      }
+      setPickSlots(slots);
+    }
+  }, [existingPicks, pickTiers]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,7 +292,11 @@ export default function Admin() {
         toast({ title: "Save failed", description: data?.error || "", variant: "destructive" });
         return;
       }
-      toast({ title: "Tiers saved", description: `${data.saved} golfers` });
+      if (Array.isArray(data.warnings) && data.warnings.length) {
+        toast({ title: `Tiers saved — ${data.warnings.length} team(s) now have invalid picks`, description: data.warnings.slice(0, 4).join(" · "), variant: "destructive" });
+      } else {
+        toast({ title: "Tiers saved", description: `${data.saved} golfers` });
+      }
     } catch {
       toast({ title: "Could not reach server", variant: "destructive" });
     } finally {
@@ -383,24 +413,31 @@ export default function Admin() {
     });
   };
 
+  const setSlot = (slot: string, golferId: string) => setPickSlots((s) => ({ ...s, [slot]: golferId }));
+
+  // Golfers eligible for a slot: in the slot's tier(s) and not used by another slot.
+  const slotOptions = (tiers: number[], slotKey: string) =>
+    pickTiers.filter(
+      (g) => tiers.includes(g.tier) && (pickSlots[slotKey] === g.golferId || !Object.values(pickSlots).includes(g.golferId)),
+    );
+
   const handleSavePicks = () => {
     if (!pickTourneyId || !pickMemberId) return;
+    const golferIds = tieredMode
+      ? [pickSlots.t1, pickSlots.t2, pickSlots.t3, pickSlots.t4, pickSlots.t5, pickSlots.extra].filter(Boolean)
+      : selectedGolfers;
+    if (golferIds.length !== 6) {
+      toast({ title: "Need 6 picks", description: tieredMode ? "Fill all 6 tier slots." : "Select exactly 6 golfers.", variant: "destructive" });
+      return;
+    }
     savePicks.mutate({
-      data: {
-        tournamentId: pickTourneyId,
-        poolMemberId: pickMemberId,
-        golferIds: selectedGolfers,
-        password
-      }
+      data: { tournamentId: pickTourneyId, poolMemberId: pickMemberId, golferIds, password },
     }, {
-      onSuccess: () => {
-        toast({ title: "Picks Saved" });
-        refetchPicks();
-      },
+      onSuccess: () => { toast({ title: "Picks Saved" }); refetchPicks(); },
       onError: (e: unknown) => {
         if (isUnauth(e)) { handle401(); return; }
         toast({ title: "Error saving picks", description: apiErr(e), variant: "destructive" });
-      }
+      },
     });
   };
 
@@ -684,32 +721,57 @@ export default function Admin() {
                 {pickTourneyId && pickMemberId && (
                   <div className="space-y-4 pt-4 border-t border-border">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold uppercase text-sm text-muted-foreground">Selected Golfers ({selectedGolfers.length}/6)</h3>
+                      <h3 className="font-bold uppercase text-sm text-muted-foreground">
+                        {tieredMode ? "Tiered Picks — 1 per tier + 1 extra (T4/T5)" : `Selected Golfers (${selectedGolfers.length}/6)`}
+                      </h3>
                       <Button size="sm" onClick={handleSavePicks} disabled={savePicks.isPending} className="uppercase tracking-wider font-bold">
                         {savePicks.isPending ? "Saving..." : "Save Picks"}
                       </Button>
                     </div>
-                    
-                    <div className="max-h-64 overflow-y-auto border border-border rounded-md bg-background p-2 grid grid-cols-1 gap-1">
-                      {field?.map(golfer => {
-                        const isSelected = selectedGolfers.includes(golfer.id);
-                        return (
-                          <div 
-                            key={golfer.id} 
-                            onClick={() => toggleGolfer(golfer.id)}
-                            className={`p-2 rounded cursor-pointer flex justify-between items-center transition-colors ${isSelected ? 'bg-primary/20 border border-primary/50' : 'hover:bg-white/5 border border-transparent'}`}
-                          >
-                            <span className={isSelected ? "font-bold text-primary" : ""}>{golfer.name}</span>
-                            {isSelected && <Badge className="bg-primary">Selected</Badge>}
+
+                    {tieredMode ? (
+                      <div className="space-y-2">
+                        {([
+                          ["t1", "T1", [1]],
+                          ["t2", "T2", [2]],
+                          ["t3", "T3", [3]],
+                          ["t4", "T4", [4]],
+                          ["t5", "T5", [5]],
+                          ["extra", "Extra (T4/T5)", [4, 5]],
+                        ] as [string, string, number[]][]).map(([slot, label, tiers]) => (
+                          <div key={slot} className="flex items-center gap-3">
+                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground w-28 shrink-0">{label}</span>
+                            <Select value={pickSlots[slot] || ""} onValueChange={(v) => setSlot(slot, v)}>
+                              <SelectTrigger className="flex-1"><SelectValue placeholder={`Pick ${label}`} /></SelectTrigger>
+                              <SelectContent>
+                                {slotOptions(tiers, slot).map((g) => (<SelectItem key={g.golferId} value={g.golferId}>{g.name}</SelectItem>))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                        );
-                      })}
-                      {(!field || field.length === 0) && (
-                        <div className="p-4 text-center text-muted-foreground text-sm">
-                          Field data not loaded. Make sure the ESPN ID is correct.
-                        </div>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto border border-border rounded-md bg-background p-2 grid grid-cols-1 gap-1">
+                        {field?.map(golfer => {
+                          const isSelected = selectedGolfers.includes(golfer.id);
+                          return (
+                            <div
+                              key={golfer.id}
+                              onClick={() => toggleGolfer(golfer.id)}
+                              className={`p-2 rounded cursor-pointer flex justify-between items-center transition-colors ${isSelected ? 'bg-primary/20 border border-primary/50' : 'hover:bg-white/5 border border-transparent'}`}
+                            >
+                              <span className={isSelected ? "font-bold text-primary" : ""}>{golfer.name}</span>
+                              {isSelected && <Badge className="bg-primary">Selected</Badge>}
+                            </div>
+                          );
+                        })}
+                        {(!field || field.length === 0) && (
+                          <div className="p-4 text-center text-muted-foreground text-sm">
+                            Field data not loaded. Make sure the ESPN ID is correct.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
