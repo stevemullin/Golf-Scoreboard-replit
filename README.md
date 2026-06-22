@@ -120,6 +120,7 @@ POST   /api/admin/tournament/:id/lock     set/clear participant pick deadline
 GET    /api/me/:token                     participant's own event + tiers + picks
 POST   /api/me/:token/picks               participant submits/updates own picks
 POST   /api/admin/send-reminders          email non-submitters their link ("Nudge")
+POST   /api/admin/clear-picks             wipe a member's picks for a tournament
 POST   /api/cron/reminders                automated reminders (X-Cron-Secret header)
 POST   /api/admin/refresh                 force ESPN refresh
 POST   /api/admin/export                  download full JSON backup

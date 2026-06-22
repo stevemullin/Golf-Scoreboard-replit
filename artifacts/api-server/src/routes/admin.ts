@@ -318,6 +318,33 @@ router.post("/admin/send-reminders", async (req, res) => {
   }
 });
 
+// POST /admin/clear-picks - wipe a member's picks + submission for a tournament
+router.post("/admin/clear-picks", async (req, res) => {
+  try {
+    const { password, tournamentId, poolMemberId } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    if (!tournamentId || !poolMemberId) {
+      res.status(400).json({ error: "tournamentId and poolMemberId are required" });
+      return;
+    }
+    await db.delete(teamPicksTable).where(and(
+      eq(teamPicksTable.tournamentId, tournamentId),
+      eq(teamPicksTable.poolMemberId, poolMemberId),
+    ));
+    await db.delete(pickSubmissionsTable).where(and(
+      eq(pickSubmissionsTable.tournamentId, tournamentId),
+      eq(pickSubmissionsTable.poolMemberId, poolMemberId),
+    ));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to clear picks");
+    res.status(500).json({ error: "Failed to clear picks" });
+  }
+});
+
 // POST /admin/tournament/:id/lock - set/clear the participant pick deadline
 router.post("/admin/tournament/:id/lock", async (req, res) => {
   try {

@@ -472,6 +472,22 @@ export default function Admin() {
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
 
+  const clearPicks = (memberId: string, name: string) => {
+    if (!activeTournament) { toast({ title: "No active tournament", variant: "destructive" }); return; }
+    if (!window.confirm(`Clear ${name}'s picks for ${activeTournament.name}? This deletes their selections and submission for this event.`)) return;
+    fetch("/api/admin/clear-picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, tournamentId: activeTournament.id, poolMemberId: memberId }),
+    })
+      .then((r) => {
+        if (r.status === 401) { handle401(); return; }
+        if (r.ok) { toast({ title: "Picks cleared", description: `${name} can pick again` }); loadAdminMembers(); }
+        else toast({ title: "Couldn't clear picks", variant: "destructive" });
+      })
+      .catch(() => toast({ title: "Could not reach server", variant: "destructive" }));
+  };
+
   const sendReminders = () => {
     setNudging(true);
     fetch("/api/admin/send-reminders", {
@@ -859,11 +875,29 @@ export default function Admin() {
                             : <span className="text-[10px] rounded bg-yellow-500/20 text-yellow-500 px-2 py-0.5 uppercase tracking-wider">Not yet ✗</span>
                         )}
                       </div>
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Email on file: </span>
+                        {m.email
+                          ? <span className="font-mono">{m.email}</span>
+                          : <span className="text-yellow-500">none</span>}
+                      </div>
                       <div className="flex gap-2 items-center">
-                        <Input value={emailDraft[m.id] ?? ""} onChange={e => setEmailDraft({ ...emailDraft, [m.id]: e.target.value })} placeholder="email@example.com" className="h-8 text-sm" />
+                        <Input
+                          value={emailDraft[m.id] ?? (m.email || "")}
+                          onChange={e => setEmailDraft({ ...emailDraft, [m.id]: e.target.value })}
+                          onKeyDown={e => { if (e.key === "Enter") saveMemberEmail(m.id); }}
+                          placeholder="email@example.com"
+                          className="h-8 text-sm"
+                        />
                         <Button size="sm" variant="outline" onClick={() => saveMemberEmail(m.id)} className="h-8 text-xs uppercase tracking-wider">Save</Button>
                         <Button size="sm" variant="ghost" onClick={() => copyMyLink(m.accessToken)} className="h-8 text-xs uppercase tracking-wider text-muted-foreground hover:text-primary whitespace-nowrap">Copy link</Button>
                       </div>
+                      {activeTournament && (m.submitted || m.pickCount > 0) && (
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <span className="text-xs text-muted-foreground">{m.pickCount} pick{m.pickCount === 1 ? "" : "s"}{m.submitted ? " · submitted" : " · draft"}</span>
+                          <Button size="sm" variant="ghost" onClick={() => clearPicks(m.id, m.name)} className="h-7 text-xs text-red-400 hover:text-red-300 uppercase tracking-wider">Clear picks</Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
