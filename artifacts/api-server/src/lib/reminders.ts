@@ -19,7 +19,7 @@ export interface ReminderResult {
 // a deadline set and still in the future) so it can't spam at the wrong time.
 export async function sendPickReminders(baseUrl?: string): Promise<ReminderResult> {
   const empty = { sent: 0, skippedNoEmail: 0, alreadySubmitted: 0 };
-  if (!isEmailConfigured()) return { ok: false, ...empty, reason: "Email is not configured (set SMTP_USER and SMTP_PASS in Render)" };
+  if (!isEmailConfigured()) return { ok: false, ...empty, reason: "Email is not configured (set BREVO_API_KEY and EMAIL_FROM in Render)" };
 
   const tournament = await db.select().from(tournamentsTable).where(eq(tournamentsTable.isActive, true)).then((r) => r[0]);
   if (!tournament) return { ok: false, ...empty, reason: "No active tournament" };

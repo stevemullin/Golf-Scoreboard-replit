@@ -1,38 +1,51 @@
-import nodemailer, { type Transporter } from "nodemailer";
 import { logger } from "./logger";
 
-// Email is optional: with no SMTP_USER/SMTP_PASS set, sending is a no-op so the
-// rest of the app works fine without it. Gmail app-passwords work out of the box
-// via service: "gmail" (smtp.gmail.com); set SMTP_USER + SMTP_PASS in Render.
-let transporter: Transporter | null = null;
+// Render's free tier blocks outbound SMTP, so we send through Brevo's HTTPS API
+// (port 443) instead of nodemailer/Gmail. Configure BREVO_API_KEY + a verified
+// sender address (EMAIL_FROM, falling back to SMTP_USER if that's still set).
+// Sending is a no-op when unconfigured so the rest of the app works without it.
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
-export function isEmailConfigured(): boolean {
-  return !!(process.env["SMTP_USER"] && process.env["SMTP_PASS"]);
+function fromAddress(): string | undefined {
+  return process.env["EMAIL_FROM"] || process.env["SMTP_USER"];
 }
 
-function getTransporter(): Transporter | null {
-  if (!isEmailConfigured()) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env["SMTP_USER"], pass: process.env["SMTP_PASS"] },
-    });
-  }
-  return transporter;
+export function isEmailConfigured(): boolean {
+  return !!(process.env["BREVO_API_KEY"] && fromAddress());
 }
 
 export async function sendEmail(opts: { to: string; subject: string; text: string; html?: string }): Promise<boolean> {
-  const t = getTransporter();
-  if (!t) {
-    logger.warn("Email not configured (SMTP_USER/SMTP_PASS); skipping send");
+  const apiKey = process.env["BREVO_API_KEY"];
+  const from = fromAddress();
+  if (!apiKey || !from) {
+    logger.warn("Email not configured (BREVO_API_KEY / EMAIL_FROM); skipping send");
     return false;
   }
-  const from = process.env["SMTP_FROM"] || process.env["SMTP_USER"]!;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    await t.sendMail({ from, to: opts.to, subject: opts.subject, text: opts.text, html: opts.html });
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        sender: { email: from, name: process.env["EMAIL_FROM_NAME"] || "Golf Pool" },
+        to: [{ email: opts.to }],
+        subject: opts.subject,
+        textContent: opts.text,
+        ...(opts.html ? { htmlContent: opts.html } : {}),
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      logger.error({ status: res.status, body: body.slice(0, 300), to: opts.to }, "Brevo send failed");
+      return false;
+    }
     return true;
   } catch (err) {
     logger.error({ err, to: opts.to }, "Failed to send email");
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }

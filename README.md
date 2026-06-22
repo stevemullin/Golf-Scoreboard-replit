@@ -79,8 +79,9 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
   - **Pick reminders (email)** — a **Nudge now** button emails everyone who
     hasn't submitted their personal pick link; the same can run daily, unattended,
     via a free external cron hitting `/api/cron/reminders`. Only fires while picks
-    are open (tiers built, deadline set and in the future). Needs `SMTP_USER` /
-    `SMTP_PASS` (Gmail app-password) set in Render — without them it's a no-op.
+    are open (tiers built, deadline set and in the future). Needs `BREVO_API_KEY`
+    + `EMAIL_FROM` in Render (Brevo's HTTPS API — Render's free tier blocks SMTP,
+    so Gmail won't work) — a no-op without them.
   - Force an ESPN refresh; **download a full JSON backup**.
 - **Champion celebration** — banner + confetti when a tournament goes Final.
 
@@ -136,8 +137,8 @@ All `/api/admin/*` routes are rate-limited (30/min per IP) and gated by `ADMIN_P
 | `NODE_ENV` | `production` |
 | `NODE_VERSION` | `24` |
 | `ODDS_API_KEY` | [The-Odds-API](https://the-odds-api.com) key (free tier) — powers the Golfer Tiers odds fetch (majors only). |
-| `SMTP_USER` / `SMTP_PASS` | Gmail address + [app-password](https://myaccount.google.com/apppasswords) (needs 2FA) for pick-reminder emails. Optional — email is a no-op without them. |
-| `SMTP_FROM` | Optional From address (defaults to `SMTP_USER`). |
+| `BREVO_API_KEY` | [Brevo](https://www.brevo.com) API key (free tier) for pick-reminder emails. **Sent over HTTPS** — Render's free tier blocks outbound SMTP, so Gmail/nodemailer can't be used. Optional — email is a no-op without it. |
+| `EMAIL_FROM` | Verified Brevo sender address (your email). Optional `EMAIL_FROM_NAME` sets the display name. |
 | `CRON_SECRET` | Shared secret required (as `X-Cron-Secret`) to trigger `/api/cron/reminders`. |
 | `APP_URL` | Base URL used in links inside cron-sent emails (defaults to the live URL). |
 
