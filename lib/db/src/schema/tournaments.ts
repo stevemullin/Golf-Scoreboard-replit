@@ -10,6 +10,8 @@ export const tournamentsTable = pgTable("tournaments", {
   status: text("status").notNull().default("upcoming"),
   currentRound: integer("current_round").notNull().default(0),
   isActive: boolean("is_active").notNull().default(false),
+  // Field size for the projected cut (50/60/70). null = cut indicator disabled.
+  cutSize: integer("cut_size"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
