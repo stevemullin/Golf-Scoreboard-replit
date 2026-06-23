@@ -23,6 +23,21 @@ router.get("/tournaments", async (req, res) => {
       createdAt: t.createdAt.toISOString(),
     }));
 
+    // Newest event first. ESPN event ids are incremental, so they sort
+    // chronologically; non-ESPN tournaments fall back to year.
+    const idNum = (x: string | null) => {
+      const n = Number(x);
+      return x && !Number.isNaN(n) ? n : null;
+    };
+    result.sort((a, b) => {
+      const ae = idNum(a.espnEventId);
+      const be = idNum(b.espnEventId);
+      if (ae != null && be != null) return be - ae;
+      if (ae != null) return -1;
+      if (be != null) return 1;
+      return b.year - a.year;
+    });
+
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Failed to get tournaments");

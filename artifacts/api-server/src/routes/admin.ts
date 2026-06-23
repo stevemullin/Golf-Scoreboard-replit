@@ -191,9 +191,17 @@ router.post("/admin/import-historical", async (req, res) => {
       return;
     }
 
-    // Create or reuse the tournament (keyed on ESPN event id).
+    // Create or reuse the tournament (keyed on ESPN event id). Use a short clean
+    // name (the display already appends the year, so don't bake it into the name).
+    const NAME_MAP: Record<string, string> = {
+      "masters": "Masters",
+      "pga championship": "PGA",
+      "u.s. open": "US Open",
+      "the open": "British Open",
+    };
+    const cleanName = NAME_MAP[String(major).toLowerCase()] ?? data.name;
     const meta = {
-      name: `${data.name} ${yr}`,
+      name: cleanName,
       year: yr,
       espnEventId: data.espnEventId,
       status: "completed",

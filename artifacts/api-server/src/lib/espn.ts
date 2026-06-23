@@ -183,6 +183,16 @@ function parseEvent(event: any): { golfers: ESPNGolferData[]; eventStatus: ESPNE
       });
     }
 
+    // Completed events drop a cut player's R3/R4 rows entirely. Backfill them as
+    // isCut rows so the scorer applies the missed-cut penalty instead of a free 0.
+    if (golferIsCut) {
+      for (let r = 1; r <= maxRound; r++) {
+        if (!scores.some((s) => s.roundNumber === r)) {
+          scores.push({ roundNumber: r, scoreToPar: null, holesCompleted: 0, isCut: true, isWd: false, isDq: false, teeTime: null, holeScores: null });
+        }
+      }
+    }
+
     golfers.push({ espnId, name, scores, currentRound: maxRound });
   }
 
