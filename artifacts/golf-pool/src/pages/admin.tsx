@@ -60,6 +60,8 @@ export default function Admin() {
   const [nudging, setNudging] = useState(false);
   const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
   const [editingEspnValue, setEditingEspnValue] = useState("");
+  const [editNameValue, setEditNameValue] = useState("");
+  const [editYearValue, setEditYearValue] = useState("");
   
   const [pickTourneyId, setPickTourneyId] = useState("");
   const [pickMemberId, setPickMemberId] = useState("");
@@ -401,23 +403,46 @@ export default function Admin() {
     });
   };
 
-  const handleUpdateEspnId = async (tournamentId: string) => {
-    if (!editingEspnValue.trim()) return;
+  const handleSaveEdit = async (tournamentId: string) => {
+    const body: { password: string; name?: string; year?: number; espnEventId?: string } = { password };
+    if (editNameValue.trim()) body.name = editNameValue.trim();
+    if (editYearValue.trim() && !isNaN(Number(editYearValue))) body.year = Number(editYearValue.trim());
+    if (editingEspnValue.trim()) body.espnEventId = editingEspnValue.trim();
     try {
       const res = await fetch(`/api/admin/tournament/${tournamentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ espnEventId: editingEspnValue.trim(), password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.status === 401) { handle401(); return; }
       if (!res.ok) {
-        toast({ title: "Error updating ESPN ID", description: data.error || res.statusText, variant: "destructive" });
+        toast({ title: "Update failed", description: data.error || res.statusText, variant: "destructive" });
         return;
       }
-      toast({ title: "ESPN ID Updated", description: "Field re-fetched from ESPN." });
+      toast({ title: "Tournament updated" });
       setEditingEspnId(null);
-      setEditingEspnValue("");
+      refetchTournaments();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteTournament = async (tournamentId: string, label: string) => {
+    if (!window.confirm(`Delete "${label}" and ALL its data (picks, tiers, scores, submissions)? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/admin/tournament/${tournamentId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.status === 401) { handle401(); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast({ title: "Delete failed", description: d.error || res.statusText, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Tournament deleted" });
       refetchTournaments();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -695,26 +720,34 @@ export default function Admin() {
                             </Button>
                           )}
                           <Button size="sm" variant="ghost" onClick={() => {
-                            setEditingEspnId(editingEspnId === t.id ? null : t.id);
+                            const open = editingEspnId === t.id ? null : t.id;
+                            setEditingEspnId(open);
                             setEditingEspnValue(t.espnEventId || "");
+                            setEditNameValue(t.name || "");
+                            setEditYearValue(String(t.year || ""));
                           }} className="text-xs text-muted-foreground hover:text-primary px-2">
-                            Edit ID
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDeleteTournament(t.id, `${t.name} ${t.year}`)} className="text-xs text-red-400 hover:text-red-300 px-2">
+                            Delete
                           </Button>
                         </div>
                       </div>
                       {editingEspnId === t.id && (
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex gap-2 pt-1 flex-wrap items-center">
+                          <Input value={editNameValue} onChange={e => setEditNameValue(e.target.value)} placeholder="Name" className="h-8 text-sm bg-input border-border w-40" />
+                          <Input value={editYearValue} onChange={e => setEditYearValue(e.target.value)} placeholder="Year" className="h-8 text-sm bg-input border-border w-20" />
                           <Input
                             value={editingEspnValue}
                             onChange={e => setEditingEspnValue(e.target.value)}
                             placeholder="ESPN Event ID"
-                            className="h-8 text-sm bg-input border-border"
-                            onKeyDown={e => { if (e.key === "Enter") handleUpdateEspnId(t.id); if (e.key === "Escape") { setEditingEspnId(null); setEditingEspnValue(""); } }}
+                            className="h-8 text-sm bg-input border-border w-40"
+                            onKeyDown={e => { if (e.key === "Enter") handleSaveEdit(t.id); if (e.key === "Escape") setEditingEspnId(null); }}
                           />
-                          <Button size="sm" onClick={() => handleUpdateEspnId(t.id)} disabled={!editingEspnValue.trim()} className="h-8 text-xs uppercase tracking-wider">
+                          <Button size="sm" onClick={() => handleSaveEdit(t.id)} className="h-8 text-xs uppercase tracking-wider">
                             Save
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => { setEditingEspnId(null); setEditingEspnValue(""); }} className="h-8 text-xs">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingEspnId(null)} className="h-8 text-xs">
                             Cancel
                           </Button>
                         </div>

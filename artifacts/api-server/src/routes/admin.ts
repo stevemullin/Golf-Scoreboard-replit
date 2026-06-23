@@ -110,20 +110,24 @@ router.post("/admin/tournament", async (req, res) => {
 router.patch("/admin/tournament/:tournamentId", async (req, res) => {
   try {
     const { tournamentId } = req.params;
-    const { espnEventId, password } = req.body;
+    const { name, year, espnEventId, password } = req.body;
 
     if (!checkPassword(password)) {
       res.status(401).json({ error: "Invalid password" });
       return;
     }
 
-    if (!espnEventId) {
-      res.status(400).json({ error: "espnEventId is required" });
+    const updates: { name?: string; year?: number; espnEventId?: string } = {};
+    if (typeof name === "string" && name.trim()) updates.name = name.trim();
+    if (year !== undefined && year !== null && !isNaN(Number(year))) updates.year = Number(year);
+    if (typeof espnEventId === "string" && espnEventId.trim()) updates.espnEventId = espnEventId.trim();
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "Nothing to update" });
       return;
     }
 
     const tournament = await db.update(tournamentsTable)
-      .set({ espnEventId })
+      .set(updates)
       .where(eq(tournamentsTable.id, tournamentId))
       .returning()
       .then(r => r[0]);
@@ -133,21 +137,21 @@ router.patch("/admin/tournament/:tournamentId", async (req, res) => {
       return;
     }
 
-    // Re-fetch the field from ESPN with the new ID
-    try {
-      const field = await fetchESPNField(espnEventId);
-      for (const golfer of field) {
-        const existing = await db.select().from(golfersTable).where(eq(golfersTable.espnId, golfer.espnId)).then(r => r[0]);
-        if (!existing) {
-          await db.insert(golfersTable).values({ espnId: golfer.espnId, name: golfer.name });
+    // Only when the ESPN ID changed: re-fetch the field + force a fresh sync.
+    if (updates.espnEventId) {
+      try {
+        const field = await fetchESPNField(updates.espnEventId);
+        for (const golfer of field) {
+          const existing = await db.select().from(golfersTable).where(eq(golfersTable.espnId, golfer.espnId)).then(r => r[0]);
+          if (!existing) {
+            await db.insert(golfersTable).values({ espnId: golfer.espnId, name: golfer.name });
+          }
         }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to re-fetch ESPN field after ESPN ID update");
       }
-    } catch (err) {
-      req.log.warn({ err }, "Failed to re-fetch ESPN field after ESPN ID update");
+      await db.update(apiCacheTable).set({ lastFetchedAt: null }).where(eq(apiCacheTable.tournamentId, tournamentId));
     }
-
-    // Reset cache so next scoreboard load triggers a fresh sync
-    await db.update(apiCacheTable).set({ lastFetchedAt: null }).where(eq(apiCacheTable.tournamentId, tournamentId));
 
     res.json({
       id: tournament.id,
@@ -162,6 +166,35 @@ router.patch("/admin/tournament/:tournamentId", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to update tournament");
     res.status(500).json({ error: "Failed to update tournament" });
+  }
+});
+
+// DELETE /admin/tournament/:tournamentId - remove a tournament + all its data
+router.delete("/admin/tournament/:tournamentId", async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const password = req.body?.password || req.get("x-admin-password");
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    const existing = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId)).then(r => r[0]);
+    if (!existing) {
+      res.status(404).json({ error: "Tournament not found" });
+      return;
+    }
+    // Delete dependent rows first (don't rely on DB-level cascade being present).
+    await db.delete(golferTiersTable).where(eq(golferTiersTable.tournamentId, tournamentId));
+    await db.delete(pickSubmissionsTable).where(eq(pickSubmissionsTable.tournamentId, tournamentId));
+    await db.delete(teamPicksTable).where(eq(teamPicksTable.tournamentId, tournamentId));
+    await db.delete(golferScoresTable).where(eq(golferScoresTable.tournamentId, tournamentId));
+    await db.delete(manualScoresTable).where(eq(manualScoresTable.tournamentId, tournamentId));
+    await db.delete(apiCacheTable).where(eq(apiCacheTable.tournamentId, tournamentId));
+    await db.delete(tournamentsTable).where(eq(tournamentsTable.id, tournamentId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete tournament");
+    res.status(500).json({ error: "Failed to delete tournament" });
   }
 });
 
