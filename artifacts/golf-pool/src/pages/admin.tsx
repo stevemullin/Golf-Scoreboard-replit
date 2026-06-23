@@ -58,6 +58,11 @@ export default function Admin() {
   const [emailDraft, setEmailDraft] = useState<{ [id: string]: string }>({});
   const [lockDraft, setLockDraft] = useState<{ [id: string]: string }>({});
   const [nudging, setNudging] = useState(false);
+  const [importYear, setImportYear] = useState(String(new Date().getFullYear()));
+  const [importMajor, setImportMajor] = useState("Masters");
+  const [importPicks, setImportPicks] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<{ name: string; golfers: number; members: { name: string; matched: number; unmatched: string[] }[] } | null>(null);
   const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
   const [editingEspnValue, setEditingEspnValue] = useState("");
   const [editNameValue, setEditNameValue] = useState("");
@@ -447,6 +452,37 @@ export default function Admin() {
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
+  };
+
+  const handleImportHistorical = () => {
+    const picks = importPicks.split("\n").map((line) => {
+      const idx = line.indexOf(":");
+      if (idx === -1) return null;
+      const member = line.slice(0, idx).trim();
+      const golfers = line.slice(idx + 1).split(",").map((s) => s.trim()).filter(Boolean);
+      return member && golfers.length ? { member, golfers } : null;
+    }).filter(Boolean);
+    if (!picks.length) {
+      toast({ title: "Add picks first", description: "One line per member — e.g. \"Hof: Rory McIlroy, Sam Burns, …\"", variant: "destructive" });
+      return;
+    }
+    setImportBusy(true);
+    setImportResult(null);
+    fetch("/api/admin/import-historical", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, year: Number(importYear), major: importMajor, picks }),
+    })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 401) { handle401(); return; }
+        if (!r.ok) { toast({ title: "Import failed", description: d.error || "", variant: "destructive" }); return; }
+        setImportResult(d);
+        toast({ title: "Imported", description: `${d.name}: ${d.golfers} golfers, ${d.members?.length || 0} teams` });
+        refetchTournaments();
+      })
+      .catch(() => toast({ title: "Could not reach server", variant: "destructive" }))
+      .finally(() => setImportBusy(false));
   };
 
   const handleCreateMember = () => {
@@ -863,6 +899,58 @@ export default function Admin() {
                     </div>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-card-border shadow-lg">
+            <CardHeader className="bg-black/20 border-b border-border">
+              <CardTitle className="text-xl uppercase tracking-wider text-primary">Import Past Event</CardTitle>
+              <CardDescription>Backfill a completed major from ESPN's final scores + the picks. Scores come from ESPN; paste one line per member.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="space-y-2">
+                  <Label>Year</Label>
+                  <Input value={importYear} onChange={e => setImportYear(e.target.value)} className="w-24" placeholder="2026" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Major</Label>
+                  <Select value={importMajor} onValueChange={setImportMajor}>
+                    <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Masters">Masters</SelectItem>
+                      <SelectItem value="PGA Championship">PGA Championship</SelectItem>
+                      <SelectItem value="U.S. Open">U.S. Open</SelectItem>
+                      <SelectItem value="The Open">The Open (British)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleImportHistorical} disabled={importBusy} className="uppercase font-bold tracking-wider">
+                  {importBusy ? "Importing…" : "Import"}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label>Picks — one line per member (<span className="font-mono text-xs">Name: golfer1, golfer2, …</span>)</Label>
+                <textarea
+                  value={importPicks}
+                  onChange={e => setImportPicks(e.target.value)}
+                  rows={6}
+                  placeholder={"Hof: Rory McIlroy, Sam Burns, Cameron Young, Viktor Hovland, Sepp Straka, Alex Noren\nMullin: Bryson DeChambeau, Matt Fitzpatrick, ..."}
+                  className="w-full bg-input border border-border rounded-md p-2 text-sm font-mono"
+                />
+              </div>
+              {importResult && (
+                <div className="text-sm space-y-1 border-t border-border pt-3">
+                  <div className="font-bold text-primary">{importResult.name} — {importResult.golfers} golfers imported</div>
+                  {importResult.members.map((m) => (
+                    <div key={m.name} className="flex flex-wrap justify-between gap-2">
+                      <span>{m.name}: {m.matched}/6 matched</span>
+                      {m.unmatched.length > 0 && <span className="text-yellow-500 text-xs">unmatched: {m.unmatched.join(", ")}</span>}
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground pt-1">View it from the scoreboard's tournament dropdown.</p>
+                </div>
               )}
             </CardContent>
           </Card>

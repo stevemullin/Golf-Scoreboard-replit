@@ -13,6 +13,7 @@ _Last updated: 2026-06-22._
 - **Admin** — PGA-schedule event picker; create / rename / delete tournaments; edit ESPN ID / year; set active; cut size; pick deadline; JSON backup; force refresh; clear a member's picks.
 - **Golfer Tiers** (majors) — build 5 tiers from winner odds (8-per-tier default, draggable dividers), tiered pick entry (1 per tier + extra from T4/T5), odds-sorted dropdowns, re-tier validation.
 - **Self-service picks** — per-member secret links, own-pick page with lock, scoreboard pick masking until reveal, email reminders via Brevo + admin "Nudge now".
+- **Import past events** — admin tool to backfill completed majors from ESPN's official final scores + pasted picks (ESPN's `?dates=<year>` endpoint; `?event=<id>` doesn't serve historical). Frozen, viewable via the tournament dropdown.
 
 ## 🔜 Next — small, ready to build
 

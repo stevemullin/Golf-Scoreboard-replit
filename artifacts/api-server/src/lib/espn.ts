@@ -78,118 +78,146 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
       event = data.events[0];
     }
 
-    const competition = event.competitions?.[0];
-    if (!competition) return null;
-
-    // Determine current round from competitors' linescores
-    let maxRound = 0;
-    for (const comp of (competition.competitors || [])) {
-      for (const ls of (comp.linescores || [])) {
-        if (ls.period <= 4 && ls.linescores?.some((h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== "")) {
-          if (ls.period > maxRound) maxRound = ls.period;
-        }
-      }
-    }
-
-    const eventStatus: ESPNEventStatus = {
-      state: event.status?.type?.state || "pre",
-      completed: event.status?.type?.completed || false,
-      currentRound: maxRound,
-      startDate: event.date || null,
-      endDate: event.endDate || null,
-      broadcasts: Array.from(
-        new Set(((competition.broadcasts || []) as Array<{ names?: string[] }>).flatMap((b) => b.names || [])),
-      ),
-      statusDetail: event.status?.type?.shortDetail || event.status?.type?.description || null,
-    };
-
-    const golfers: ESPNGolferData[] = [];
-
-    for (const competitor of (competition.competitors || [])) {
-      const espnId = competitor.id;
-      const name = competitor.athlete?.displayName || competitor.athlete?.fullName || "Unknown";
-      const scores: ESPNRoundScore[] = [];
-
-      // Determine cut/out status at the golfer level. Once the field reaches
-      // round 3+, ESPN stops advancing cut players, so their highest linescore
-      // period stays below the field's current round. A player who simply hasn't
-      // teed off in the current round still gets a linescore entry for it, so they
-      // are NOT flagged. (The old per-round "empty round > 2 = cut" rule wrongly
-      // flagged everyone who hadn't started round 3/4 yet.)
-      const golferPeriods = (competitor.linescores || [])
-        .map((l: { period: number }) => l.period)
-        .filter((p: number) => p >= 1 && p <= 4);
-      const golferMaxPeriod = golferPeriods.length ? Math.max(...golferPeriods) : 0;
-      const golferIsCut = maxRound >= 3 && golferMaxPeriod < maxRound;
-
-      for (const linescore of (competitor.linescores || [])) {
-        const roundNumber = linescore.period;
-        if (roundNumber > 4) continue;
-
-        // Critical: check whether displayValue actually EXISTS on the object.
-        // - displayValue absent → round simply hasn't started yet (skip this entry)
-        // - displayValue = "-" → could be cut (check further) or in-progress placeholder
-        // - displayValue = "E" / number → active/finished score
-        const hasDisplayValue = Object.prototype.hasOwnProperty.call(linescore, "displayValue")
-          && linescore.displayValue != null
-          && linescore.displayValue !== "";
-
-        // If there's no displayValue at all, the round hasn't started.
-        // Still push a "not started" entry so the DB upsert can clear any
-        // stale isCut=true flags left over from a previous (buggy) sync.
-        if (!hasDisplayValue) {
-          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: golferIsCut, isWd: false, isDq: false, teeTime: null, holeScores: null });
-          continue;
-        }
-
-        const displayValue = linescore.displayValue as string;
-        const holes = linescore.linescores || [];
-        const holesCompleted = holes.filter(
-          (h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== ""
-        ).length;
-        const holeScores = holes.length
-          ? JSON.stringify(
-              holes.slice(0, 18).map((h: { displayValue?: string; scoreType?: { displayValue?: string } }) => ({
-                s: h.displayValue && h.displayValue !== "-" && h.displayValue !== "" ? h.displayValue : null,
-                p: h.scoreType?.displayValue ?? null,
-              })),
-            )
-          : null;
-
-        const scoreToPar = parseScoreValue(displayValue);
-
-        // Cut only if this golfer is out (golferIsCut) AND this specific round
-        // has no score — never null out a round they actually played.
-        const isCut = golferIsCut && holesCompleted === 0 && scoreToPar === null;
-
-        // Extract tee time
-        let teeTime: string | null = null;
-        const stats = linescore.statistics?.categories?.[0]?.stats;
-        if (stats && stats.length > 0) {
-          const lastStat = stats[stats.length - 1];
-          if (lastStat?.displayValue && lastStat.displayValue.includes(":")) {
-            teeTime = lastStat.displayValue;
-          }
-        }
-
-        scores.push({
-          roundNumber,
-          scoreToPar: isCut ? null : scoreToPar,
-          holesCompleted,
-          isCut,
-          isWd: false,
-          isDq: false,
-          teeTime,
-          holeScores,
-        });
-      }
-
-      golfers.push({ espnId, name, scores, currentRound: maxRound });
-    }
-
-    return { golfers, eventStatus };
+    return parseEvent(event);
   } catch (err) {
     logger.error({ err }, "Failed to fetch ESPN scoreboard");
+    return null;
+  }
+}
+
+// Parse a single ESPN event object into golfers + status. Shared by the live
+// (?event=) and historical (?dates=) fetch paths so scoring is identical.
+function parseEvent(event: any): { golfers: ESPNGolferData[]; eventStatus: ESPNEventStatus } | null {
+  const competition = event.competitions?.[0];
+  if (!competition) return null;
+
+  // Determine current round from competitors' linescores
+  let maxRound = 0;
+  for (const comp of (competition.competitors || [])) {
+    for (const ls of (comp.linescores || [])) {
+      if (ls.period <= 4 && ls.linescores?.some((h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== "")) {
+        if (ls.period > maxRound) maxRound = ls.period;
+      }
+    }
+  }
+
+  const eventStatus: ESPNEventStatus = {
+    state: event.status?.type?.state || "pre",
+    completed: event.status?.type?.completed || false,
+    currentRound: maxRound,
+    startDate: event.date || null,
+    endDate: event.endDate || null,
+    broadcasts: Array.from(
+      new Set(((competition.broadcasts || []) as Array<{ names?: string[] }>).flatMap((b) => b.names || [])),
+    ),
+    statusDetail: event.status?.type?.shortDetail || event.status?.type?.description || null,
+  };
+
+  const golfers: ESPNGolferData[] = [];
+
+  for (const competitor of (competition.competitors || [])) {
+    const espnId = competitor.id;
+    const name = competitor.athlete?.displayName || competitor.athlete?.fullName || "Unknown";
+    const scores: ESPNRoundScore[] = [];
+
+    // Determine cut/out status at the golfer level. Once the field reaches
+    // round 3+, ESPN stops advancing cut players, so their highest linescore
+    // period stays below the field's current round. A player who simply hasn't
+    // teed off in the current round still gets a linescore entry for it, so they
+    // are NOT flagged. (The old per-round "empty round > 2 = cut" rule wrongly
+    // flagged everyone who hadn't started round 3/4 yet.)
+    const golferPeriods = (competitor.linescores || [])
+      .map((l: { period: number }) => l.period)
+      .filter((p: number) => p >= 1 && p <= 4);
+    const golferMaxPeriod = golferPeriods.length ? Math.max(...golferPeriods) : 0;
+    const golferIsCut = maxRound >= 3 && golferMaxPeriod < maxRound;
+
+    for (const linescore of (competitor.linescores || [])) {
+      const roundNumber = linescore.period;
+      if (roundNumber > 4) continue;
+
+      const hasDisplayValue = Object.prototype.hasOwnProperty.call(linescore, "displayValue")
+        && linescore.displayValue != null
+        && linescore.displayValue !== "";
+
+      if (!hasDisplayValue) {
+        scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: golferIsCut, isWd: false, isDq: false, teeTime: null, holeScores: null });
+        continue;
+      }
+
+      const displayValue = linescore.displayValue as string;
+      const holes = linescore.linescores || [];
+      const holesCompleted = holes.filter(
+        (h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== ""
+      ).length;
+      const holeScores = holes.length
+        ? JSON.stringify(
+            holes.slice(0, 18).map((h: { displayValue?: string; scoreType?: { displayValue?: string } }) => ({
+              s: h.displayValue && h.displayValue !== "-" && h.displayValue !== "" ? h.displayValue : null,
+              p: h.scoreType?.displayValue ?? null,
+            })),
+          )
+        : null;
+
+      const scoreToPar = parseScoreValue(displayValue);
+      const isCut = golferIsCut && holesCompleted === 0 && scoreToPar === null;
+
+      let teeTime: string | null = null;
+      const stats = linescore.statistics?.categories?.[0]?.stats;
+      if (stats && stats.length > 0) {
+        const lastStat = stats[stats.length - 1];
+        if (lastStat?.displayValue && lastStat.displayValue.includes(":")) {
+          teeTime = lastStat.displayValue;
+        }
+      }
+
+      scores.push({
+        roundNumber,
+        scoreToPar: isCut ? null : scoreToPar,
+        holesCompleted,
+        isCut,
+        isWd: false,
+        isDq: false,
+        teeTime,
+        holeScores,
+      });
+    }
+
+    golfers.push({ espnId, name, scores, currentRound: maxRound });
+  }
+
+  return { golfers, eventStatus };
+}
+
+// Historical fetch: ESPN's ?event=<id> falls back to the current event for past
+// ids, but ?dates=<year> returns the full season WITH final scores. Find the
+// event by name within that year and parse it.
+export async function fetchESPNHistoricalEvent(year: number, nameQuery: string): Promise<{
+  espnEventId: string;
+  name: string;
+  golfers: ESPNGolferData[];
+  eventStatus: ESPNEventStatus;
+} | null> {
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${year}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) {
+      logger.warn({ status: response.status, year }, "ESPN historical fetch non-200");
+      return null;
+    }
+    const data = await response.json() as any;
+    const events = (data.events || []) as any[];
+    const q = nameQuery.toLowerCase();
+    const event = events.find((e) => String(e.name || "").toLowerCase().includes(q));
+    if (!event) {
+      logger.warn({ year, nameQuery }, "No matching historical event found");
+      return null;
+    }
+    const parsed = parseEvent(event);
+    if (!parsed) return null;
+    return { espnEventId: String(event.id), name: String(event.name), ...parsed };
+  } catch (err) {
+    logger.error({ err, year, nameQuery }, "Failed to fetch historical ESPN event");
     return null;
   }
 }

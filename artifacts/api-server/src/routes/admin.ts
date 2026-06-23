@@ -11,8 +11,8 @@ import {
   golferTiersTable,
   pickSubmissionsTable,
 } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
-import { fetchESPNField, fetchESPNScoreboard, fetchESPNEvents } from "../lib/espn";
+import { eq, and, inArray, sql } from "drizzle-orm";
+import { fetchESPNField, fetchESPNScoreboard, fetchESPNEvents, fetchESPNHistoricalEvent } from "../lib/espn";
 import { refreshFromESPN } from "../lib/scoring";
 import { majorSportKey, fetchMajorOdds, normalizeName } from "../lib/odds";
 import { validateTieredPicks } from "../lib/tier-rules";
@@ -166,6 +166,133 @@ router.patch("/admin/tournament/:tournamentId", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to update tournament");
     res.status(500).json({ error: "Failed to update tournament" });
+  }
+});
+
+// POST /admin/import-historical - backfill a completed past event from ESPN's
+// final scores (?dates=year) plus a set of picks. Frozen (no api_cache row, so
+// no live refresh). Body: { password, year, major, picks: [{member, golfers[]}] }
+router.post("/admin/import-historical", async (req, res) => {
+  try {
+    const { password, year, major, picks } = req.body;
+    if (!checkPassword(password)) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+    const yr = Number(year);
+    if (!yr || !major || !Array.isArray(picks)) {
+      res.status(400).json({ error: "year, major and picks[] are required" });
+      return;
+    }
+
+    const data = await fetchESPNHistoricalEvent(yr, String(major));
+    if (!data) {
+      res.status(404).json({ error: `Couldn't find "${major}" ${yr} in ESPN data` });
+      return;
+    }
+
+    // Create or reuse the tournament (keyed on ESPN event id).
+    const meta = {
+      name: `${data.name} ${yr}`,
+      year: yr,
+      espnEventId: data.espnEventId,
+      status: "completed",
+      currentRound: data.eventStatus.currentRound || 4,
+      isActive: false,
+      startDate: data.eventStatus.startDate ? new Date(data.eventStatus.startDate) : null,
+      endDate: data.eventStatus.endDate ? new Date(data.eventStatus.endDate) : null,
+      broadcasts: data.eventStatus.broadcasts.length ? data.eventStatus.broadcasts.join(", ") : null,
+      statusDetail: data.eventStatus.statusDetail ?? "Final",
+    };
+    let tournament = await db.select().from(tournamentsTable).where(eq(tournamentsTable.espnEventId, data.espnEventId)).then((r) => r[0]);
+    if (tournament) {
+      await db.update(tournamentsTable).set(meta).where(eq(tournamentsTable.id, tournament.id));
+    } else {
+      tournament = await db.insert(tournamentsTable).values(meta).returning().then((r) => r[0]);
+    }
+    const tournamentId = tournament.id;
+
+    // Upsert golfers, then build espnId -> golferId.
+    for (const g of data.golfers) {
+      const existing = await db.select().from(golfersTable).where(eq(golfersTable.espnId, g.espnId)).then((r) => r[0]);
+      if (!existing) await db.insert(golfersTable).values({ espnId: g.espnId, name: g.name });
+    }
+    const dbGolfers = await db.select({ id: golfersTable.id, espnId: golfersTable.espnId }).from(golfersTable);
+    const espnToId = new Map(dbGolfers.map((g) => [g.espnId, g.id]));
+
+    // Upsert final scores.
+    let scoresStored = 0;
+    for (const g of data.golfers) {
+      const golferId = espnToId.get(g.espnId);
+      if (!golferId) continue;
+      for (const rs of g.scores) {
+        await db.insert(golferScoresTable).values({
+          tournamentId, golferId, roundNumber: rs.roundNumber,
+          scoreToPar: rs.scoreToPar, holesCompleted: rs.holesCompleted,
+          isCut: rs.isCut, isWd: rs.isWd, isDq: rs.isDq, teeTime: rs.teeTime, holeScores: rs.holeScores,
+        }).onConflictDoUpdate({
+          target: [golferScoresTable.tournamentId, golferScoresTable.golferId, golferScoresTable.roundNumber],
+          set: {
+            scoreToPar: sql`excluded.score_to_par`, holesCompleted: sql`excluded.holes_completed`,
+            isCut: sql`excluded.is_cut`, isWd: sql`excluded.is_wd`, isDq: sql`excluded.is_dq`,
+            teeTime: sql`excluded.tee_time`, holeScores: sql`excluded.hole_scores`,
+          },
+        });
+        scoresStored++;
+      }
+    }
+
+    // Name matchers over this event's field.
+    const byNorm = new Map<string, string>();
+    const byLast = new Map<string, string[]>();
+    for (const g of data.golfers) {
+      const gid = espnToId.get(g.espnId);
+      if (!gid) continue;
+      const norm = normalizeName(g.name);
+      byNorm.set(norm, gid);
+      const last = norm.split(" ").pop() || norm;
+      if (!byLast.has(last)) byLast.set(last, []);
+      byLast.get(last)!.push(gid);
+    }
+    const matchGolfer = (name: string): string | null => {
+      const norm = normalizeName(name);
+      if (byNorm.has(norm)) return byNorm.get(norm)!;
+      const last = norm.split(" ").pop() || norm;
+      const cands = byLast.get(last);
+      if (cands && cands.length === 1) return cands[0]!;
+      for (const [n, id] of byNorm) if (n.includes(norm) || norm.includes(n)) return id;
+      return null;
+    };
+
+    const members: { name: string; matched: number; unmatched: string[] }[] = [];
+    for (const entry of picks) {
+      const memberName = String(entry?.member || "").trim();
+      const golferNames: string[] = Array.isArray(entry?.golfers) ? entry.golfers.map((x: unknown) => String(x).trim()).filter(Boolean) : [];
+      if (!memberName || golferNames.length === 0) continue;
+
+      const allMembers = await db.select().from(poolMembersTable);
+      let member = allMembers.find((m) => m.name.toLowerCase() === memberName.toLowerCase());
+      if (!member) member = await db.insert(poolMembersTable).values({ name: memberName }).returning().then((r) => r[0]);
+      if (!member) continue;
+
+      const matchedIds: string[] = [];
+      const unmatched: string[] = [];
+      for (const gn of golferNames) {
+        const gid = matchGolfer(gn);
+        if (gid) matchedIds.push(gid);
+        else unmatched.push(gn);
+      }
+      await db.delete(teamPicksTable).where(and(eq(teamPicksTable.tournamentId, tournamentId), eq(teamPicksTable.poolMemberId, member.id)));
+      for (const gid of matchedIds) {
+        await db.insert(teamPicksTable).values({ tournamentId, poolMemberId: member.id, golferId: gid });
+      }
+      members.push({ name: memberName, matched: matchedIds.length, unmatched });
+    }
+
+    res.json({ tournamentId, name: meta.name, golfers: data.golfers.length, scoresStored, members });
+  } catch (err) {
+    req.log.error({ err }, "Failed to import historical event");
+    res.status(500).json({ error: "Failed to import historical event" });
   }
 });
 

@@ -62,6 +62,9 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
     name / year / ESPN event ID), or enter the ID manually.
   - Add pool members and assign each member's 6 picks.
   - Set the active tournament; **rename, edit ESPN ID/year, or delete** any tournament.
+  - **Import a past major** — backfill a completed event from ESPN's official final
+    scores plus pasted picks (one line per member); shows up in the scoreboard's
+    tournament dropdown. Frozen (no live refresh).
   - **Cut indicator** — set a per-tournament cut size (Top 50 Masters / 60 US Open
     / 70 PGA & Open, or off). During round 2 the board shows a projected cut line
     and a yellow/red **RISK** badge on at-risk golfers.
@@ -109,6 +112,7 @@ POST   /api/admin/verify                  check admin password
 POST   /api/admin/tournament              create tournament
 PATCH  /api/admin/tournament/:id          update name / year / ESPN event id
 DELETE /api/admin/tournament/:id          delete a tournament + all its data
+POST   /api/admin/import-historical       backfill a past major (ESPN final scores + picks)
 POST   /api/admin/tournament/:id/activate set active
 POST   /api/admin/tournament/:id/cut-size set/clear cut size
 POST   /api/admin/pool-member             create pool member
