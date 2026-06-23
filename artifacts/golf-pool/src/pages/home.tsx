@@ -36,6 +36,7 @@ export default function Home() {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"live" | "manual">("live");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showCards, setShowCards] = useState(false);
   const celebratedRef = useRef(false);
 
   const { data: scoreboard, isLoading } = useGetScoreboard({
@@ -328,7 +329,12 @@ export default function Home() {
 
             {mode === "live" && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">Team Details</h2>
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <h2 className="text-2xl font-bold uppercase tracking-wider text-muted-foreground">Team Details</h2>
+                  <button onClick={() => setShowCards(v => !v)} className="text-xs font-bold uppercase tracking-wider text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors">
+                    {showCards ? "Hide scorecards" : "Show scorecards"}
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {scoreboard?.leaderboard?.map(entry => {
                     const currentRound = scoreboard.tournament.currentRound || 1;
@@ -342,6 +348,7 @@ export default function Home() {
                       roundScores: (number | null)[];
                       roundCounted: (boolean | null)[];
                       roundIsPenalty: boolean[];
+                      roundHoles: (string | null)[];
                       holesCompleted: number;
                       totalToPar: number | null;
                     }>();
@@ -357,6 +364,7 @@ export default function Home() {
                             roundScores: [null, null, null, null],
                             roundCounted: [null, null, null, null],
                             roundIsPenalty: [false, false, false, false],
+                            roundHoles: [null, null, null, null],
                             holesCompleted: 0,
                             totalToPar: null,
                           });
@@ -366,6 +374,7 @@ export default function Home() {
                         agg.roundScores[idx] = g.scoreToPar ?? null;
                         agg.roundCounted[idx] = g.counted ?? null;
                         agg.roundIsPenalty[idx] = g.isPenalty;
+                        agg.roundHoles[idx] = (g as unknown as { holeScores?: string | null }).holeScores ?? null;
                         if (g.isCut) agg.isCut = true;
                         if (g.isWd) agg.isWd = true;
                         if (g.isDq) agg.isDq = true;
@@ -421,7 +430,8 @@ export default function Home() {
                                   // Dropped = any round has counted===false (consistent across all rounds after backend fix)
                                   const isDropped = golfer.roundCounted.some(c => c === false);
                                   return (
-                                    <TableRow key={golfer.golferId} className={`border-border/20 hover:bg-white/5 ${isDropped ? 'opacity-40' : ''}`}>
+                                    <React.Fragment key={golfer.golferId}>
+                                    <TableRow className={`border-border/20 hover:bg-white/5 ${isDropped ? 'opacity-40' : ''}`}>
                                       <TableCell className="font-semibold">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           <span>{golfer.golferName}</span>
@@ -445,6 +455,14 @@ export default function Home() {
                                         </TableCell>
                                       ))}
                                     </TableRow>
+                                    {showCards && golfer.roundHoles.some(h => h) && (
+                                      <TableRow className="border-none hover:bg-transparent">
+                                        <TableCell colSpan={7} className="py-2 bg-black/10">
+                                          <HoleScorecard roundHoles={golfer.roundHoles} />
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                    </React.Fragment>
                                   );
                                 })}
                               </TableBody>
@@ -462,6 +480,43 @@ export default function Home() {
           </main>
         )}
       </div>
+    </div>
+  );
+}
+
+function HoleScorecard({ roundHoles }: { roundHoles: (string | null)[] }) {
+  const holeColor = (p: string | null) => {
+    if (!p || p === "E") return "text-muted-foreground";
+    if (p.startsWith("-")) return "bg-primary/20 text-primary";
+    if (p.startsWith("+")) return "bg-red-500/20 text-red-400";
+    return "text-muted-foreground";
+  };
+  const rounds = roundHoles
+    .map((hs, i) => {
+      if (!hs) return null;
+      try {
+        const holes = JSON.parse(hs) as { s: string | null; p: string | null }[];
+        return holes.length ? { round: i + 1, holes } : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as { round: number; holes: { s: string | null; p: string | null }[] }[];
+  if (!rounds.length) return <span className="text-xs text-muted-foreground">No hole-by-hole data.</span>;
+  return (
+    <div className="space-y-1">
+      {rounds.map((r) => (
+        <div key={r.round} className="flex items-center gap-1">
+          <span className="text-[10px] font-bold text-muted-foreground w-5 shrink-0">R{r.round}</span>
+          <div className="flex gap-0.5 flex-wrap">
+            {r.holes.map((h, hi) => (
+              <span key={hi} title={`Hole ${hi + 1}`} className={`inline-flex items-center justify-center w-5 h-5 text-[10px] font-mono rounded ${holeColor(h.p)}`}>
+                {h.s ?? "·"}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

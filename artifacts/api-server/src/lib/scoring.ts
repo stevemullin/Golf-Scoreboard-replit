@@ -24,6 +24,7 @@ export interface GolferRoundDetail {
   isPenalty: boolean;
   teeTime: string | null;
   counted: boolean;
+  holeScores: string | null;
 }
 
 export interface RoundScore {
@@ -131,6 +132,7 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
     isWd: boolean;
     isDq: boolean;
     teeTime: string | null;
+    holeScores: string | null;
   }> = [];
 
   for (const golferData of golfers) {
@@ -147,6 +149,7 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
         isWd: rs.isWd,
         isDq: rs.isDq,
         teeTime: rs.teeTime,
+        holeScores: rs.holeScores,
       });
     }
   }
@@ -166,6 +169,7 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
           isWd: sql`excluded.is_wd`,
           isDq: sql`excluded.is_dq`,
           teeTime: sql`excluded.tee_time`,
+          holeScores: sql`excluded.hole_scores`,
         },
       });
   }
@@ -237,6 +241,7 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
       isWd: golferScoresTable.isWd,
       isDq: golferScoresTable.isDq,
       teeTime: golferScoresTable.teeTime,
+      holeScores: golferScoresTable.holeScores,
     }).from(golferScoresTable).where(eq(golferScoresTable.tournamentId, tournamentId)),
     db.select({
       poolMemberId: teamPicksTable.poolMemberId,
@@ -295,6 +300,7 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
         isPenalty: boolean;
         holesCompleted: number;
         teeTime: string | null;
+        holeScores: string | null;
       }>;
       tournamentTotal: number;
       counted: boolean;
@@ -358,6 +364,7 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
           isPenalty,
           holesCompleted: gs?.holesCompleted ?? 0,
           teeTime: gs?.teeTime ?? null,
+          holeScores: gs?.holeScores ?? null,
         });
       }
 
@@ -406,6 +413,7 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
           isPenalty: rd.isPenalty,
           teeTime: rd.teeTime,
           counted: g.counted,
+          holeScores: rd.holeScores,
         };
       });
 

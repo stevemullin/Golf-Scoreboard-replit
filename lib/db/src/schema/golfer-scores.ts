@@ -13,6 +13,7 @@ export const golferScoresTable = pgTable("golfer_scores", {
   isWd: boolean("is_wd").notNull().default(false),
   isDq: boolean("is_dq").notNull().default(false),
   teeTime: text("tee_time"),
+  holeScores: text("hole_scores"), // JSON: per-hole [{s:strokes,p:toPar}]
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
   unique().on(t.tournamentId, t.golferId, t.roundNumber),

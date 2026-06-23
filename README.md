@@ -54,6 +54,7 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
 - **Live scoreboard** — best-4-of-6 team rankings, per-round breakdown, expandable
   team detail showing each golfer's score, "thru"/tee time, and dropped golfers.
   The header shows the event's dates, TV/streaming, and live status (from ESPN).
+  A **Show scorecards** toggle reveals each golfer's hole-by-hole scores per round.
 - **Manual mode** — enter scores by hand (fallback if ESPN is unavailable).
 - **Admin** (`/admin`, password-protected):
   - Create a tournament — **pick it from the PGA schedule** dropdown (autofills

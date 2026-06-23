@@ -15,6 +15,7 @@ export interface ESPNRoundScore {
   isWd: boolean;
   isDq: boolean;
   teeTime: string | null;
+  holeScores: string | null; // JSON: [{s:strokes,p:toPar}, ...up to 18]
 }
 
 export interface ESPNGolferData {
@@ -129,7 +130,7 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
         // Still push a "not started" entry so the DB upsert can clear any
         // stale isCut=true flags left over from a previous (buggy) sync.
         if (!hasDisplayValue) {
-          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: golferIsCut, isWd: false, isDq: false, teeTime: null });
+          scores.push({ roundNumber, scoreToPar: null, holesCompleted: 0, isCut: golferIsCut, isWd: false, isDq: false, teeTime: null, holeScores: null });
           continue;
         }
 
@@ -138,6 +139,14 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
         const holesCompleted = holes.filter(
           (h: { displayValue: string }) => h.displayValue !== "-" && h.displayValue !== ""
         ).length;
+        const holeScores = holes.length
+          ? JSON.stringify(
+              holes.slice(0, 18).map((h: { displayValue?: string; scoreType?: { displayValue?: string } }) => ({
+                s: h.displayValue && h.displayValue !== "-" && h.displayValue !== "" ? h.displayValue : null,
+                p: h.scoreType?.displayValue ?? null,
+              })),
+            )
+          : null;
 
         const scoreToPar = parseScoreValue(displayValue);
 
@@ -163,6 +172,7 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
           isWd: false,
           isDq: false,
           teeTime,
+          holeScores,
         });
       }
 
