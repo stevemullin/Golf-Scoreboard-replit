@@ -63,6 +63,9 @@ export default function Admin() {
   const [importPicks, setImportPicks] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<{ name: string; golfers: number; members: { name: string; matched: number; unmatched: string[] }[] } | null>(null);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: boolean; name?: string; year?: number; major?: string; error?: string; members?: { name: string; matched: number; unmatched: string[] }[] }[] | null>(null);
   const [editingEspnId, setEditingEspnId] = useState<string | null>(null);
   const [editingEspnValue, setEditingEspnValue] = useState("");
   const [editNameValue, setEditNameValue] = useState("");
@@ -483,6 +486,61 @@ export default function Admin() {
       })
       .catch(() => toast({ title: "Could not reach server", variant: "destructive" }))
       .finally(() => setImportBusy(false));
+  };
+
+  const parseBulkEvents = (text: string) => {
+    const events: { year: number; major: string; picks: { member: string; golfers: string[] }[] }[] = [];
+    let cur: { year: number; major: string; picks: { member: string; golfers: string[] }[] } | null = null;
+    for (const raw of text.split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("#")) {
+        const h = line.replace(/^#+/, "").trim();
+        const ym = h.match(/(20\d{2})/);
+        const year = ym ? Number(ym[1]) : null;
+        let major: string | null = null;
+        if (/master/i.test(h)) major = "Masters";
+        else if (/pga/i.test(h)) major = "PGA Championship";
+        else if (/u\.?\s*s\.?\s*open|\bus open\b/i.test(h)) major = "U.S. Open";
+        else if (/british|the open|open champ/i.test(h)) major = "The Open";
+        cur = year && major ? { year, major, picks: [] } : null;
+        if (cur) events.push(cur);
+        continue;
+      }
+      if (cur && line.includes(":")) {
+        const idx = line.indexOf(":");
+        const member = line.slice(0, idx).trim();
+        const golfers = line.slice(idx + 1).split(",").map((s) => s.trim()).filter(Boolean);
+        if (member && golfers.length) cur.picks.push({ member, golfers });
+      }
+    }
+    return events;
+  };
+
+  const handleBulkImport = () => {
+    const events = parseBulkEvents(bulkText);
+    if (!events.length) {
+      toast({ title: "Nothing to import", description: "Start each event with '# Major Year' (e.g. '# Masters 2024').", variant: "destructive" });
+      return;
+    }
+    setBulkBusy(true);
+    setBulkResult(null);
+    fetch("/api/admin/import-historical", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events, password }),
+    })
+      .then(async (r) => {
+        if (r.status === 401) { handle401(); return; }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { toast({ title: "Bulk import failed", description: d.error || "", variant: "destructive" }); return; }
+        setBulkResult(d.results || []);
+        const ok = (d.results || []).filter((x: { ok: boolean }) => x.ok).length;
+        toast({ title: `Imported ${ok}/${(d.results || []).length} events` });
+        refetchTournaments();
+      })
+      .catch(() => toast({ title: "Could not reach server", variant: "destructive" }))
+      .finally(() => setBulkBusy(false));
   };
 
   const handleCreateMember = () => {
@@ -952,6 +1010,33 @@ export default function Admin() {
                   <p className="text-xs text-muted-foreground pt-1">View it from the scoreboard's tournament dropdown.</p>
                 </div>
               )}
+
+              <div className="space-y-2 border-t border-border pt-4">
+                <Label>Bulk import — paste many events; start each with <span className="font-mono text-xs"># Major Year</span></Label>
+                <textarea
+                  value={bulkText}
+                  onChange={e => setBulkText(e.target.value)}
+                  rows={10}
+                  placeholder={"# Masters 2024\nMullin: Scottie Scheffler, ...\nConway: ...\n\n# PGA Championship 2024\nMullin: ..."}
+                  className="w-full bg-input border border-border rounded-md p-2 text-sm font-mono"
+                />
+                <Button onClick={handleBulkImport} disabled={bulkBusy} className="uppercase font-bold tracking-wider">
+                  {bulkBusy ? "Importing…" : "Import all events"}
+                </Button>
+                {bulkResult && (
+                  <div className="text-sm space-y-1 pt-2">
+                    {bulkResult.map((r, i) => (
+                      <div key={i}>
+                        {r.ok ? (
+                          <span><span className="text-primary font-bold">✓ {r.name}</span> — {(r.members || []).length} teams{(r.members || []).some(m => m.unmatched.length) ? ` · unmatched: ${(r.members || []).flatMap(m => m.unmatched).join(", ")}` : ""}</span>
+                        ) : (
+                          <span className="text-yellow-500">✗ {r.major} {r.year}: {r.error}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
