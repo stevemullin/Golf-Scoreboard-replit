@@ -17,6 +17,21 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { ChampionBanner, Confetti } from "@/components/champion-celebration";
 
+// "Jun 18–21, 2026" / "Jun 28–Jul 1, 2026" from ESPN ISO dates (golf = US tz).
+function fmtDateRange(s: string | null, e: string | null): string | null {
+  if (!s) return null;
+  const tz = { timeZone: "America/New_York" } as const;
+  const sd = new Date(s);
+  const ed = e ? new Date(e) : null;
+  const sMonth = sd.toLocaleDateString("en-US", { ...tz, month: "short" });
+  const sDay = sd.toLocaleDateString("en-US", { ...tz, day: "numeric" });
+  const year = sd.toLocaleDateString("en-US", { ...tz, year: "numeric" });
+  if (!ed) return `${sMonth} ${sDay}, ${year}`;
+  const eMonth = ed.toLocaleDateString("en-US", { ...tz, month: "short" });
+  const eDay = ed.toLocaleDateString("en-US", { ...tz, day: "numeric" });
+  return `${sMonth} ${sDay}–${sMonth === eMonth ? eDay : `${eMonth} ${eDay}`}, ${year}`;
+}
+
 export default function Home() {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"live" | "manual">("live");
@@ -78,6 +93,11 @@ export default function Home() {
     (scoreboard as unknown as { roster?: { poolMemberId: string; name: string; submitted: boolean; pickCount: number }[] } | undefined)?.roster ?? [];
   const picksLockAt =
     (scoreboard?.tournament as unknown as { picksLockAt?: string | null } | undefined)?.picksLockAt ?? null;
+  // Richer event header (ESPN metadata).
+  const tMeta = scoreboard?.tournament as unknown as { statusDetail?: string | null; startDate?: string | null; endDate?: string | null; broadcasts?: string | null } | undefined;
+  const statusDetail = tMeta?.statusDetail ?? null;
+  const broadcasts = tMeta?.broadcasts ?? null;
+  const dateRange = fmtDateRange(tMeta?.startDate ?? null, tMeta?.endDate ?? null);
 
   // Only celebrate a *revealed* champion — never while picks are still masked
   // (a tournament can read "Final" from ESPN before our picks reveal).
@@ -104,7 +124,9 @@ export default function Home() {
               {activeTournament?.name || "Golf Pool"}
             </h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground font-mono">
-              <span>{activeTournament?.status === "completed" ? "Final" : `Round ${activeTournament?.currentRound || 1}`}</span>
+              <span>{statusDetail || (activeTournament?.status === "completed" ? "Final" : `Round ${activeTournament?.currentRound || 1}`)}</span>
+              {dateRange && <span>| {dateRange}</span>}
+              {broadcasts && <span>| 📺 {broadcasts}</span>}
               {scoreboard?.lastUpdated && (
                 <span>| Updated: {new Date(scoreboard.lastUpdated).toLocaleTimeString()}</span>
               )}

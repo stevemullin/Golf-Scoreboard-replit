@@ -28,6 +28,10 @@ export interface ESPNEventStatus {
   state: string; // "pre", "in", "post"
   completed: boolean;
   currentRound: number;
+  startDate: string | null;
+  endDate: string | null;
+  broadcasts: string[];
+  statusDetail: string | null; // e.g. "Final", "In Progress - Round 3"
 }
 
 function parseScoreValue(displayValue: string): number | null {
@@ -82,6 +86,12 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
       state: event.status?.type?.state || "pre",
       completed: event.status?.type?.completed || false,
       currentRound: maxRound,
+      startDate: event.date || null,
+      endDate: event.endDate || null,
+      broadcasts: Array.from(
+        new Set(((competition.broadcasts || []) as Array<{ names?: string[] }>).flatMap((b) => b.names || [])),
+      ),
+      statusDetail: event.status?.type?.shortDetail || event.status?.type?.description || null,
     };
 
     const golfers: ESPNGolferData[] = [];

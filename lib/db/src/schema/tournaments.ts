@@ -14,6 +14,11 @@ export const tournamentsTable = pgTable("tournaments", {
   cutSize: integer("cut_size"),
   // Participant picks freeze at this time; null = not set (no self-service lock).
   picksLockAt: timestamp("picks_lock_at", { withTimezone: true }),
+  // Event metadata from ESPN (for the scoreboard header).
+  startDate: timestamp("start_date", { withTimezone: true }),
+  endDate: timestamp("end_date", { withTimezone: true }),
+  broadcasts: text("broadcasts"), // comma-joined TV/streaming names
+  statusDetail: text("status_detail"), // e.g. "Final", "In Progress - Round 3"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -177,6 +177,10 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
   await db.update(tournamentsTable).set({
     currentRound: eventStatus.currentRound || tournament.currentRound,
     status: newStatus,
+    startDate: eventStatus.startDate ? new Date(eventStatus.startDate) : tournament.startDate,
+    endDate: eventStatus.endDate ? new Date(eventStatus.endDate) : tournament.endDate,
+    broadcasts: eventStatus.broadcasts.length ? eventStatus.broadcasts.join(", ") : tournament.broadcasts,
+    statusDetail: eventStatus.statusDetail ?? tournament.statusDetail,
   }).where(eq(tournamentsTable.id, tournamentId));
 
   // Final timestamp update to reflect when the full refresh completed
