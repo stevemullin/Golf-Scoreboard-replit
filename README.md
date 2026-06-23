@@ -55,12 +55,13 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
   team detail showing each golfer's score, "thru"/tee time, and dropped golfers.
   The header shows the event's dates, TV/streaming, and live status (from ESPN).
   A **Show scorecards** toggle reveals each golfer's hole-by-hole scores per round.
+  A header dropdown lets anyone view **past tournaments**, not just the active one.
 - **Manual mode** — enter scores by hand (fallback if ESPN is unavailable).
 - **Admin** (`/admin`, password-protected):
   - Create a tournament — **pick it from the PGA schedule** dropdown (autofills
     name / year / ESPN event ID), or enter the ID manually.
   - Add pool members and assign each member's 6 picks.
-  - Set the active tournament; edit a tournament's ESPN ID.
+  - Set the active tournament; **rename, edit ESPN ID/year, or delete** any tournament.
   - **Cut indicator** — set a per-tournament cut size (Top 50 Masters / 60 US Open
     / 70 PGA & Open, or off). During round 2 the board shows a projected cut line
     and a yellow/red **RISK** badge on at-risk golfers.
@@ -99,14 +100,15 @@ and the built frontend (SPA) for everything else, so the whole app runs as a
 ```
 GET    /api/healthz                       liveness
 GET    /api/healthz/db                    liveness + DB ping (used by keep-alive)
-GET    /api/scoreboard                    live leaderboard (+ projectedCut)
+GET    /api/scoreboard[?tournamentId=]    live leaderboard (+ projectedCut); any event by id
 GET    /api/scoreboard/manual             manual leaderboard
 PUT    /api/scoreboard/manual             save a manual score
 GET    /api/tournaments                   list tournaments
 GET    /api/pool-members                  list pool members
 POST   /api/admin/verify                  check admin password
 POST   /api/admin/tournament              create tournament
-PATCH  /api/admin/tournament/:id          update ESPN event id
+PATCH  /api/admin/tournament/:id          update name / year / ESPN event id
+DELETE /api/admin/tournament/:id          delete a tournament + all its data
 POST   /api/admin/tournament/:id/activate set active
 POST   /api/admin/tournament/:id/cut-size set/clear cut size
 POST   /api/admin/pool-member             create pool member

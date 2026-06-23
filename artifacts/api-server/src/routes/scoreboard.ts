@@ -15,12 +15,14 @@ const router = Router();
 
 router.get("/scoreboard", async (req, res) => {
   try {
-    const activeTournament = await db.select().from(tournamentsTable)
-      .where(eq(tournamentsTable.isActive, true))
-      .then(r => r[0]);
+    // ?tournamentId=… views any tournament (e.g. a past one); default = active.
+    const requestedId = typeof req.query.tournamentId === "string" ? req.query.tournamentId : "";
+    const activeTournament = requestedId
+      ? await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, requestedId)).then(r => r[0])
+      : await db.select().from(tournamentsTable).where(eq(tournamentsTable.isActive, true)).then(r => r[0]);
 
     if (!activeTournament) {
-      res.status(404).json({ error: "No active tournament" });
+      res.status(404).json({ error: requestedId ? "Tournament not found" : "No active tournament" });
       return;
     }
 

@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { 
-  useGetScoreboard, 
-  useGetManualScoreboard, 
-  useGetTournaments, 
+import {
+  useGetManualScoreboard,
+  useGetTournaments,
   useUpdateManualScore,
-  getGetScoreboardQueryKey
 } from "@workspace/api-client-react";
 import { formatScore, formatTeeTime } from "@/lib/score";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -13,7 +11,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { ChampionBanner, Confetti } from "@/components/champion-celebration";
 
@@ -39,9 +37,15 @@ export default function Home() {
   const [showCards, setShowCards] = useState(false);
   const celebratedRef = useRef(false);
 
-  const { data: scoreboard, isLoading } = useGetScoreboard({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: { refetchInterval: 60000 } as any,
+  const [viewTourneyId, setViewTourneyId] = useState("");
+  const { data: tournaments } = useGetTournaments();
+  const { data: scoreboard, isLoading } = useQuery({
+    queryKey: ["scoreboard", viewTourneyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/scoreboard${viewTourneyId ? `?tournamentId=${viewTourneyId}` : ""}`);
+      return res.ok ? res.json() : null;
+    },
+    refetchInterval: 60000,
   });
 
   const { data: manualScoreboard } = useGetManualScoreboard({
@@ -81,7 +85,7 @@ export default function Home() {
 
   const activeTournament = scoreboard?.tournament;
   const isFinal = activeTournament?.status === "completed";
-  const champions = (scoreboard?.leaderboard ?? []).filter((e) => e.rank === 1);
+  const champions = ((scoreboard?.leaderboard ?? []) as any[]).filter((e: any) => e.rank === 1);
   // projectedCut / cutSize aren't in the generated client type yet, so read loosely.
   const projectedCut =
     (scoreboard as unknown as { projectedCut?: number | null } | undefined)?.projectedCut ?? null;
@@ -137,6 +141,19 @@ export default function Home() {
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4">
+            {tournaments && tournaments.length > 0 && (
+              <select
+                value={viewTourneyId}
+                onChange={(e) => setViewTourneyId(e.target.value)}
+                className="bg-card border border-border rounded-lg px-3 py-2 text-sm font-bold text-foreground"
+                aria-label="Select tournament"
+              >
+                <option value="">{tournaments.some((t: any) => t.isActive) ? "Active tournament" : "Select tournament…"}</option>
+                {tournaments.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.name} {t.year}{t.isActive ? " (active)" : ""}</option>
+                ))}
+              </select>
+            )}
             <div className="flex items-center gap-2 bg-card px-4 py-2 rounded-lg border border-border">
               <span className={`text-sm font-bold ${mode === 'live' ? 'text-primary' : 'text-muted-foreground'}`}>Live</span>
               <Switch 
@@ -152,7 +169,7 @@ export default function Home() {
         </header>
 
         {showChampion && (
-          <ChampionBanner names={champions.map((c) => c.name)} toPar={champions[0].toPar ?? null} />
+          <ChampionBanner names={champions.map((c: any) => c.name)} toPar={champions[0].toPar ?? null} />
         )}
 
         {!isLoading && !scoreboard ? (
@@ -280,8 +297,8 @@ export default function Home() {
                 </TableHeader>
                 <TableBody>
                   {mode === "live" ? (
-                    scoreboard?.leaderboard?.map((entry) => (
-                      <TableRow 
+                    scoreboard?.leaderboard?.map((entry: any) => (
+                      <TableRow
                         key={entry.poolMemberId} 
                         className="border-border hover:bg-white/5 cursor-pointer transition-colors"
                         onClick={() => scrollToTeam(entry.poolMemberId)}
@@ -336,7 +353,7 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {scoreboard?.leaderboard?.map(entry => {
+                  {scoreboard?.leaderboard?.map((entry: any) => {
                     const currentRound = scoreboard.tournament.currentRound || 1;
 
                     // Aggregate per-golfer data across all rounds
