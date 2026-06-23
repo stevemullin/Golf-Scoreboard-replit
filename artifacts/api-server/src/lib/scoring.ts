@@ -322,9 +322,13 @@ export async function calculateScoreboard(tournamentId: string): Promise<Leaderb
     }
 
     const golferList: GolferWithTotal[] = picks.map(pick => {
-      // A golfer is genuinely cut/WD/DQ if any of their round rows say so
+      // A golfer is genuinely cut/WD/DQ if any of their round rows say so. For a
+      // *completed* event, also treat a golfer with fewer round rows than the
+      // event played as cut — covers historical imports done before the parser
+      // backfilled missing R3/R4 rows (so the missed-cut penalty still applies).
       const picksScores = allScores.filter(s => s.golferId === pick.golferId);
-      const isCut = picksScores.some(s => s.isCut);
+      const isCut = picksScores.some(s => s.isCut)
+        || (tournament.status === "completed" && picksScores.length > 0 && picksScores.length < currentRound);
       const isWd  = picksScores.some(s => s.isWd);
       const isDq  = picksScores.some(s => s.isDq);
 
