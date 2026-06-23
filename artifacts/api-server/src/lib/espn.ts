@@ -44,7 +44,7 @@ function parseScoreValue(displayValue: string): number | null {
 export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
   golfers: ESPNGolferData[];
   eventStatus: ESPNEventStatus;
-} | null> {
+} | { notFound: true } | null> {
   try {
     const url = espnEventId
       ? `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${espnEventId}`
@@ -63,11 +63,19 @@ export async function fetchESPNScoreboard(espnEventId?: string): Promise<{
       return null;
     }
 
-    // Find the matching event if espnEventId is provided
-    let event = data.events[0];
+    // Find the matching event if espnEventId is provided. If a specific event was
+    // requested but ESPN's response doesn't include it (e.g. a future event not
+    // yet in the current window, or a wrong id), do NOT fall back to the current
+    // event — that would stamp another tournament's data onto this one.
+    let event;
     if (espnEventId) {
-      const found = data.events.find((e: { id: string }) => e.id === espnEventId);
-      if (found) event = found;
+      event = data.events.find((e: { id: string }) => e.id === espnEventId);
+      if (!event) {
+        logger.warn({ espnEventId }, "ESPN response did not include the requested event; treating as not found");
+        return { notFound: true };
+      }
+    } else {
+      event = data.events[0];
     }
 
     const competition = event.competitions?.[0];

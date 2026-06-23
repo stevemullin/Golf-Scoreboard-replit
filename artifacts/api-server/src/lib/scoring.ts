@@ -96,7 +96,22 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
 
   const espnData = await fetchESPNScoreboard(tournament.espnEventId ?? undefined);
   if (!espnData) {
-    logger.warn({ tournamentId }, "ESPN fetch returned null, serving stale data");
+    logger.warn({ tournamentId }, "ESPN fetch returned null (transient), serving stale data");
+    return;
+  }
+  if ("notFound" in espnData) {
+    // ESPN doesn't have this tournament's event (future event, or wrong id).
+    // Reset to a clean 'upcoming' state so we never show another event's
+    // header/scores. Scores/picks are left alone (self-heal once the event is live).
+    await db.update(tournamentsTable).set({
+      status: "upcoming",
+      currentRound: 0,
+      startDate: null,
+      endDate: null,
+      broadcasts: null,
+      statusDetail: null,
+    }).where(eq(tournamentsTable.id, tournamentId));
+    logger.warn({ tournamentId, espnEventId: tournament.espnEventId }, "ESPN event not found; reset stale event metadata");
     return;
   }
 
