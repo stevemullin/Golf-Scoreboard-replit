@@ -202,7 +202,7 @@ function parseEvent(event: any): { golfers: ESPNGolferData[]; eventStatus: ESPNE
 // Historical fetch: ESPN's ?event=<id> falls back to the current event for past
 // ids, but ?dates=<year> returns the full season WITH final scores. Find the
 // event by name within that year and parse it.
-export async function fetchESPNHistoricalEvent(year: number, nameQuery: string): Promise<{
+export async function fetchESPNHistoricalEvent(year: number, nameQuery: string, espnEventId?: string): Promise<{
   espnEventId: string;
   name: string;
   golfers: ESPNGolferData[];
@@ -217,10 +217,13 @@ export async function fetchESPNHistoricalEvent(year: number, nameQuery: string):
     }
     const data = await response.json() as any;
     const events = (data.events || []) as any[];
+    // Prefer matching by ESPN event id (reliable); fall back to a name match.
     const q = nameQuery.toLowerCase();
-    const event = events.find((e) => String(e.name || "").toLowerCase().includes(q));
+    const event = espnEventId
+      ? events.find((e) => String(e.id) === espnEventId)
+      : events.find((e) => String(e.name || "").toLowerCase().includes(q));
     if (!event) {
-      logger.warn({ year, nameQuery }, "No matching historical event found");
+      logger.warn({ year, nameQuery, espnEventId }, "No matching historical event found");
       return null;
     }
     const parsed = parseEvent(event);
