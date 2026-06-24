@@ -10,7 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, isNotNull, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { fetchESPNScoreboard } from "./espn";
+import { fetchESPNScoreboard, fetchESPNHistoricalEvent } from "./espn";
 import { logger } from "./logger";
 
 export interface GolferRoundDetail {
@@ -88,6 +88,15 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
   const tournament = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId)).then(r => r[0]);
   if (!tournament) return;
 
+  // Completed events are FINAL — never refresh. ESPN's ?event=<id> stops
+  // returning a major once it ages out of the current window (it returns the
+  // next event instead), which previously reset finished tournaments to
+  // 'upcoming' and wiped their scoring. Stamp the cache and leave them alone.
+  if (tournament.status === "completed") {
+    await db.update(apiCacheTable).set({ lastFetchedAt: new Date() }).where(eq(apiCacheTable.tournamentId, tournamentId));
+    return;
+  }
+
   // Stamp lastFetchedAt immediately — prevents concurrent background refreshes
   // from all piling up while the first ESPN fetch is in flight.
   await db.update(apiCacheTable)
@@ -100,18 +109,31 @@ export async function refreshFromESPN(tournamentId: string): Promise<void> {
     return;
   }
   if ("notFound" in espnData) {
-    // ESPN doesn't have this tournament's event (future event, or wrong id).
-    // Reset to a clean 'upcoming' state so we never show another event's
-    // header/scores. Scores/picks are left alone (self-heal once the event is live).
-    await db.update(tournamentsTable).set({
-      status: "upcoming",
-      currentRound: 0,
-      startDate: null,
-      endDate: null,
-      broadcasts: null,
-      statusDetail: null,
-    }).where(eq(tournamentsTable.id, tournamentId));
-    logger.warn({ tournamentId, espnEventId: tournament.espnEventId }, "ESPN event not found; reset stale event metadata");
+    // ESPN's ?event= didn't return this event. Two cases:
+    const existingScores = await db.select({ id: golferScoresTable.id })
+      .from(golferScoresTable).where(eq(golferScoresTable.tournamentId, tournamentId)).limit(1);
+    if (existingScores.length > 0) {
+      // (a) A real event that has aged out of ESPN's window — finalize it as
+      // completed and restore its header from the season endpoint (?dates=year).
+      // Scores are already stored; do NOT wipe them.
+      const hist = await fetchESPNHistoricalEvent(tournament.year, tournament.name);
+      await db.update(tournamentsTable).set({
+        status: "completed",
+        currentRound: (hist?.eventStatus.currentRound) || tournament.currentRound || 4,
+        startDate: hist?.eventStatus.startDate ? new Date(hist.eventStatus.startDate) : tournament.startDate,
+        endDate: hist?.eventStatus.endDate ? new Date(hist.eventStatus.endDate) : tournament.endDate,
+        broadcasts: hist?.eventStatus.broadcasts.length ? hist.eventStatus.broadcasts.join(", ") : tournament.broadcasts,
+        statusDetail: hist?.eventStatus.statusDetail ?? "Final",
+      }).where(eq(tournamentsTable.id, tournamentId));
+      logger.info({ tournamentId }, "ESPN event aged out; finalized as completed");
+    } else {
+      // (b) A future/unknown event with no data yet — keep a clean 'upcoming'
+      // state so it never shows another event's header/scores.
+      await db.update(tournamentsTable).set({
+        status: "upcoming", currentRound: 0, startDate: null, endDate: null, broadcasts: null, statusDetail: null,
+      }).where(eq(tournamentsTable.id, tournamentId));
+      logger.warn({ tournamentId, espnEventId: tournament.espnEventId }, "ESPN event not found; reset to upcoming");
+    }
     return;
   }
 
